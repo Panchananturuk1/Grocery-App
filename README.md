@@ -1,36 +1,111 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# OrderKaro - Fresh Grocery Delivery App
+
+OrderKaro is a full-stack grocery delivery application built with Next.js, Express, and Supabase, allowing users to browse and order fresh groceries online.
+
+## Features
+
+- **User Authentication**: Secure login and registration using JWT
+- **Product Browsing**: Browse products by categories with search and filtering
+- **Shopping Cart**: Add products to cart, update quantities, and checkout
+- **Order Management**: View order history and track current orders
+- **User Profile**: Manage account details and delivery addresses
+- **Responsive Design**: Works seamlessly on both mobile and desktop
+
+## Tech Stack
+
+### Frontend
+- Next.js with TypeScript
+- Tailwind CSS for styling
+- React Query for data fetching
+- React Context for state management
+- React Hot Toast for notifications
+
+### Backend
+- Express.js server
+- Supabase (PostgreSQL database)
+- JWT for authentication
+- Multer for file uploads
+- Razorpay for payment processing
+
+## Project Structure
+
+```
+/
+├── src/                  # Frontend source code
+│   ├── app/              # Next.js app directory
+│   ├── components/       # Reusable UI components
+│   ├── context/          # React context providers
+│   ├── utils/            # Utility functions
+│   └── providers/        # Providers wrapper
+│
+├── backend/              # Backend source code
+│   ├── controllers/      # Request handlers
+│   ├── routes/           # API routes
+│   ├── middleware/       # Express middleware
+│   ├── config/           # Configuration files
+│   ├── database/         # Database schema and migrations
+│   └── index.js          # Server entry point
+│
+├── public/               # Static assets
+└── package.json          # Project dependencies and scripts
+```
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+- Node.js (v18+)
+- npm or yarn
+- Supabase account
 
+### Installation
+
+1. Clone the repository
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/Panchananturuk1/Grocery-App.git
+cd Grocery-App
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install frontend dependencies
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Install backend dependencies
+```bash
+cd backend
+npm install
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Set up environment variables:
 
-## Learn More
+Create `.env.local` in the root directory with:
+```
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
-To learn more about Next.js, take a look at the following resources:
+Create `.env` in the backend directory with:
+```
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_service_key
+JWT_SECRET=your_jwt_secret
+PORT=5000
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+5. Start the backend server
+```bash
+cd backend
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+6. Start the frontend development server
+```bash
+# From the root directory
+npm run dev
+```
 
-## Deploy on Vercel
+7. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Contact
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [Panchanan Turuk](https://github.com/Panchananturuk1) - Developer
