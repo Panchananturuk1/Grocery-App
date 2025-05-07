@@ -56,6 +56,25 @@ To ensure authentication works properly, update your Supabase authentication set
 1. In your Supabase dashboard, go to "API" → "Settings"
 2. Add your Render URL to the "Additional Allowed Websites" section: `https://grocery-app-y6ty.onrender.com`
 
+### Package Lock Mismatches
+
+If you see errors related to package-lock.json mismatches like:
+
+```
+npm error `npm ci` can only install packages when your package.json and package-lock.json or npm-shrinkwrap.json are in sync.
+```
+
+Solutions:
+1. Use `npm install` instead of `npm ci` in your build command:
+   ```
+   buildCommand: npm install && npm run build
+   ```
+2. If you're developing locally, update your package-lock.json before pushing:
+   ```
+   npm install
+   ```
+3. Make sure your package.json and package-lock.json are both committed to your repository
+
 ## Troubleshooting Common Deployment Issues
 
 ### Tailwind CSS Module Not Found
