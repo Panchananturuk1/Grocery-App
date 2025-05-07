@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import MainLayout from '../../components/layout/MainLayout';
 import ProductCard from '../../components/products/ProductCard';
@@ -8,7 +8,7 @@ import supabase from '../../utils/supabase';
 import { FiSearch, FiFilter, FiX } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 
-export default function ProductsPage() {
+function ProductsContent() {
   const searchParams = useSearchParams();
   const initialCategory = searchParams.get('category');
   const initialSearch = searchParams.get('search');
@@ -278,5 +278,39 @@ export default function ProductsPage() {
         </div>
       </div>
     </MainLayout>
+  );
+}
+
+// Loading fallback component
+function ProductsLoading() {
+  return (
+    <MainLayout>
+      <div className="bg-gray-50 min-h-screen py-8">
+        <div className="container mx-auto px-4">
+          <h1 className="text-3xl font-bold text-gray-800 mb-6">All Products</h1>
+          <div className="bg-white rounded-lg shadow p-4 mb-6 animate-pulse">
+            <div className="h-10 bg-gray-200 rounded w-full"></div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, index) => (
+              <div key={index} className="bg-white rounded-lg shadow p-4 h-80 animate-pulse">
+                <div className="h-40 bg-gray-200 rounded mb-4"></div>
+                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
+                <div className="h-8 bg-gray-200 rounded w-full mt-auto"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </MainLayout>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense fallback={<ProductsLoading />}>
+      <ProductsContent />
+    </Suspense>
   );
 } 
