@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import MainLayout from '@/components/layout/MainLayout';
-import { useAuth } from '@/context/AuthContext';
-import supabase from '@/utils/supabase';
+import MainLayout from '../components/layout/MainLayout';
+import { useAuth } from '../context/AuthContext';
+import supabase from '../utils/supabase';
 
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);

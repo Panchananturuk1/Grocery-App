@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import MainLayout from '@/components/layout/MainLayout';
-import supabase from '@/utils/supabase';
-import { useCart } from '@/context/CartContext';
+import MainLayout from '../../../components/layout/MainLayout';
+import supabase from '../../../utils/supabase';
+import { useCart } from '../../../context/CartContext';
 import { toast } from 'react-hot-toast';
 import {
   FiMinus,

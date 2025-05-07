@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import MainLayout from '@/components/layout/MainLayout';
-import ProductCard from '@/components/products/ProductCard';
-import supabase from '@/utils/supabase';
+import MainLayout from '../../components/layout/MainLayout';
+import ProductCard from '../../components/products/ProductCard';
+import supabase from '../../utils/supabase';
 import { FiSearch, FiFilter, FiX } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 
