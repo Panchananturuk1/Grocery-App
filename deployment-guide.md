@@ -56,75 +56,47 @@ To ensure authentication works properly, update your Supabase authentication set
 1. In your Supabase dashboard, go to "API" → "Settings"
 2. Add your Render URL to the "Additional Allowed Websites" section: `https://grocery-app-y6ty.onrender.com`
 
-## Troubleshooting Build Issues
+## Troubleshooting Common Deployment Issues
 
-If you encounter build issues on Render, try these solutions:
+### Tailwind CSS Module Not Found
 
-### Tailwind CSS Errors
+If you encounter errors related to Tailwind CSS modules not being found:
 
-If you see errors like `Cannot find module '@tailwindcss/postcss'`:
+```
+Error: Cannot find module 'tailwindcss'
+```
 
-1. Make sure Tailwind CSS is properly installed:
+Solutions:
+1. Make sure Tailwind CSS is added to your dependencies in package.json (not just devDependencies)
+2. Verify that tailwind.config.js and postcss.config.js are properly configured
+3. Update the build command in render.yaml to explicitly install Tailwind:
    ```
-   npm install -D tailwindcss postcss autoprefixer
-   ```
-
-2. Create or update `postcss.config.js`:
-   ```js
-   module.exports = {
-     plugins: {
-       tailwindcss: {},
-       autoprefixer: {},
-     },
-   }
+   npm ci && npm install tailwindcss postcss autoprefixer && npm run build
    ```
 
-3. Create or update `tailwind.config.js`:
-   ```js
-   module.exports = {
-     content: [
-       "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
-       "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
-       "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
-     ],
-     theme: {
-       extend: {},
-     },
-     plugins: [],
-   }
-   ```
+### Path Alias Resolution Problems
 
-### Module Resolution Errors
+If you see errors like:
 
-If you see errors like `Can't resolve '@/components/layout/MainLayout'`:
+```
+Module not found: Can't resolve '@/components/layout/MainLayout'
+```
 
-1. Fix import paths in your files by using relative imports:
-   ```js
-   // Change from:
-   import MainLayout from '@/components/layout/MainLayout';
-   
-   // To:
-   import MainLayout from '../../components/layout/MainLayout';
-   ```
-
-2. Update your `tsconfig.json` to properly set up path aliases:
+Solutions:
+1. Use relative imports instead of path aliases (e.g., '../components/layout/MainLayout')
+2. Make sure tsconfig.json has the proper path configuration:
    ```json
-   {
-     "compilerOptions": {
-       "paths": {
-         "@/*": ["./src/*"]
-       }
-     }
+   "paths": {
+     "@/*": ["./src/*"]
    }
    ```
+3. Add a jsconfig.json file if working primarily with JavaScript
 
-3. Update your `next.config.js` with experimental flags:
-   ```js
-   experimental: {
-     externalDir: true,
-     esmExternals: 'loose',
-   }
-   ```
+### Other Common Issues
+
+- If images aren't loading, check your next.config.js for proper image configuration
+- For API endpoint issues, verify environment variables are correctly set
+- For database connection issues, check Supabase credentials are properly configured
 
 ## Database Connection Strings (If Needed)
 
