@@ -2,8 +2,8 @@ services:
   - type: web
     name: orderkaro
     runtime: node
-    buildCommand: npm install
-    startCommand: node server-minimal.js
+    buildCommand: npm install && npm run build
+    startCommand: node server.js
     healthCheckPath: /api/health
     envVars:
       - key: NEXT_PUBLIC_SUPABASE_URL
@@ -19,4 +19,6 @@ services:
       - key: SKIP_TYPESCRIPT_CHECK
         value: "true"
       - key: PORT
-        value: "10000" 
+        value: "10000"
+      - key: DEBUG
+        value: "next:*,server:*" 

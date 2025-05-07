@@ -5,8 +5,6 @@ import "./globals.css";
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from "../context/AuthContext";
 import { CartProvider } from "../context/CartContext";
-// Metadata is now imported from a separate file to avoid 'use client' issues
-// import { metadata } from './metadata';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,13 +16,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Metadata is defined in metadata.ts
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body
@@ -39,4 +31,4 @@ export default function RootLayout({
       </body>
     </html>
   );
-}
+} 

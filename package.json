@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "start:custom": "node server.js",
+    "start": "node server.js",
+    "start:minimal": "node server-minimal.js",
     "lint": "next lint"
   },
   "dependencies": {
@@ -30,5 +30,8 @@
     "@eslint/eslintrc": "^3",
     "eslint": "^9",
     "eslint-config-next": "15.3.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

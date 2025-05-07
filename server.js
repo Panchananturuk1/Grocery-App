@@ -14,10 +14,9 @@ const port = parseInt(process.env.PORT, 10) || 10000;
 
 // Determine if we're in dev mode
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = 'localhost';
 
 // Initialize Next.js app
-const app = next({ dev, hostname, port });
+const app = next({ dev });
 const handle = app.getRequestHandler();
 
 // Configure error handling settings
@@ -64,10 +63,10 @@ app.prepare().then(() => {
     }
   });
 
-  // Start listening
-  server.listen(port, (err) => {
+  // Start listening on all interfaces (0.0.0.0) for cloud compatibility
+  server.listen(port, '0.0.0.0', (err) => {
     if (err) throw err;
-    console.log(`> Ready on http://${hostname}:${port}`);
+    console.log(`> Ready on http://0.0.0.0:${port}`);
     console.log(`> Mode: ${dev ? 'development' : 'production'}`);
   });
 });
