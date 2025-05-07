@@ -18,9 +18,9 @@ This guide explains how to deploy your OrderKaro grocery app to Render.
 4. Configure the deployment settings:
    - **Name**: OrderKaro (or your preferred name)
    - **Environment**: Node
-   - **Build Command**: `npm ci && npm run build`
-   - **Start Command**: `npm start`
-   - **Node Version**: 18 (or your preferred version)
+   - **Build Command**: `npm install && npm install --save-dev typescript@^5.8.3 @types/react@^18.3.21 @types/node@^20.17.43 @types/react-dom@^18.3.7 && npm install --save tailwindcss@^3.3.0 postcss@^8.4.0 autoprefixer@^10.4.0 && npx tailwindcss init -p && NODE_ENV=production SKIP_TYPESCRIPT_CHECK=true npm run build`
+   - **Start Command**: `node .next/standalone/server.js` (IMPORTANT: must use this with `output: 'standalone'` in next.config.js)
+   - **Node Version**: 18 or higher
 
 ### 2. Add Environment Variables
 
@@ -31,6 +31,9 @@ NEXT_PUBLIC_SUPABASE_URL=https://itetzcqolezorrcegtkf.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0ZXR6Y3FvbGV6b3JyY2VndGtmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1NDYwNjgsImV4cCI6MjA2MjEyMjA2OH0.f_RecDERFMBYzffSAzkx3vgENZuaRT5WiFXoL6Na-ss
 NODE_ENV=production
 NEXT_PUBLIC_SITE_URL=https://grocery-app-y6ty.onrender.com
+NODE_OPTIONS=--max-old-space-size=4096
+SKIP_TYPESCRIPT_CHECK=true
+PORT=10000
 ```
 
 ### 3. Deploy Your Application
@@ -55,6 +58,16 @@ To ensure authentication works properly, update your Supabase authentication set
 
 1. In your Supabase dashboard, go to "API" → "Settings"
 2. Add your Render URL to the "Additional Allowed Websites" section: `https://grocery-app-y6ty.onrender.com`
+
+## Important: Next.js Standalone Output Configuration
+
+If you're using `output: 'standalone'` in your next.config.js file (which we are), you **must** use the correct start command:
+
+```
+node .next/standalone/server.js
+```
+
+Using `next start` with the standalone output configuration will cause your app to fail with a 502 error.
 
 ### Package Lock Mismatches
 
@@ -131,6 +144,18 @@ Solutions:
 - If images aren't loading, check your next.config.js for proper image configuration
 - For API endpoint issues, verify environment variables are correctly set
 - For database connection issues, check Supabase credentials are properly configured
+
+### 502 Bad Gateway Errors
+
+If you encounter 502 errors:
+
+1. Check that your start command matches your Next.js configuration:
+   - With `output: 'standalone'`: Use `node .next/standalone/server.js`
+   - Without standalone output: Use `next start`
+
+2. Verify the PORT environment variable is set to 10000 (Render's default port)
+
+3. Check logs for any startup errors or crashes
 
 ## Database Connection Strings (If Needed)
 

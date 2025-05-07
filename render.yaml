@@ -3,7 +3,7 @@ services:
     name: orderkaro
     runtime: node
     buildCommand: npm install && npm install --save-dev typescript@^5.8.3 @types/react@^18.3.21 @types/node@^20.17.43 @types/react-dom@^18.3.7 && npm install --save tailwindcss@^3.3.0 postcss@^8.4.0 autoprefixer@^10.4.0 && npx tailwindcss init -p && NODE_ENV=production SKIP_TYPESCRIPT_CHECK=true npm run build
-    startCommand: npm start
+    startCommand: node .next/standalone/server.js
     envVars:
       - key: NEXT_PUBLIC_SUPABASE_URL
         value: https://itetzcqolezorrcegtkf.supabase.co
@@ -17,6 +17,8 @@ services:
         value: --max-old-space-size=4096
       - key: SKIP_TYPESCRIPT_CHECK
         value: "true"
+      - key: PORT
+        value: "10000"
     buildFilter:
       paths:
         - src/**/*.js
