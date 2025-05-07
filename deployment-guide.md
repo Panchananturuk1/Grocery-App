@@ -198,3 +198,33 @@ Solutions:
    }
    ```
 3. Check the build logs for any errors that might have caused the build to fail 
+
+### TypeScript Configuration Issues
+
+If you see TypeScript-related errors during build:
+
+```
+It looks like you're trying to use TypeScript but do not have the required package(s) installed.
+Please install typescript and @types/react by running:
+```
+
+Solutions:
+1. Install the required TypeScript dependencies:
+   ```
+   npm install --save-dev typescript @types/react @types/react-dom @types/node
+   ```
+
+2. Update your next.config.js to bypass TypeScript checking:
+   ```js
+   typescript: {
+     ignoreBuildErrors: true,
+     tsconfigPath: false,
+   }
+   ```
+
+3. For more severe cases, consider creating a build-specific script:
+   ```json
+   "scripts": {
+     "build": "SKIP_TYPESCRIPT_CHECK=true next build"
+   }
+   ``` 

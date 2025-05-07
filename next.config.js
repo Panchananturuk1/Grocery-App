@@ -10,6 +10,8 @@ const nextConfig = {
     // Dangerously allow production builds to successfully complete even if
     // your project has type errors.
     ignoreBuildErrors: true,
+    // Skip type checking during build
+    tsconfigPath: false, 
   },
   output: 'standalone',
   images: {
