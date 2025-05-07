@@ -18,10 +18,8 @@ const nextConfig = {
   },
   experimental: {
     externalDir: true,
-    esmExternals: 'loose',
   },
   reactStrictMode: false,
-  swcMinify: true,
 }
 
 module.exports = nextConfig 

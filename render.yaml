@@ -13,6 +13,8 @@ services:
         value: production
       - key: NEXT_PUBLIC_SITE_URL
         value: https://grocery-app-y6ty.onrender.com
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=4096
     buildFilter:
       paths:
         - src/**/*.js

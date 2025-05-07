@@ -128,4 +128,58 @@ DIRECT_URL=postgresql://postgres.itetzcqolezorrcegtkf:Monumartinez@123@aws-0-ap-
 
 ## Monitoring
 
-Monitor your application's performance and logs through the Render dashboard. Regularly check for any errors or issues in the logs to ensure your app is running smoothly. 
+Monitor your application's performance and logs through the Render dashboard. Regularly check for any errors or issues in the logs to ensure your app is running smoothly.
+
+### Next.js Configuration Issues
+
+If you see errors related to your next.config.js file, such as:
+
+```
+⚠ Invalid next.config.js options detected: 
+⚠     Unrecognized key(s) in object: 'swcMinify'
+⚠ The "experimental.esmExternals" option has been modified.
+```
+
+Solutions:
+1. Update your next.config.js to remove deprecated options:
+   ```js
+   const nextConfig = {
+     // Keep only supported options for your Next.js version
+     output: 'standalone',
+     images: {
+       domains: ['images.unsplash.com', 'img.icons8.com'],
+     },
+     // Remove problematic experimental options
+     experimental: {
+       externalDir: true,
+       // Remove: esmExternals: 'loose',
+     },
+     // Remove: swcMinify: true,
+   }
+   ```
+
+2. If you see build failure errors due to memory issues, add the NODE_OPTIONS environment variable:
+   ```
+   NODE_OPTIONS=--max-old-space-size=4096
+   ```
+
+### Build Not Found Errors
+
+If you see errors like:
+
+```
+[Error: Could not find a production build in the '.next' directory]
+```
+
+Solutions:
+1. Make sure your build command is properly configured in render.yaml:
+   ```
+   buildCommand: npm install && npm run build
+   ```
+2. Check that your package.json has the correct build script:
+   ```json
+   "scripts": {
+     "build": "next build"
+   }
+   ```
+3. Check the build logs for any errors that might have caused the build to fail 
