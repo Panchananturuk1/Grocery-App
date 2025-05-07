@@ -20,6 +20,13 @@ const nextConfig = {
     externalDir: true,
   },
   reactStrictMode: false,
+  // Make sure server listens on the port Render expects
+  serverRuntimeConfig: {
+    port: process.env.PORT || 10000
+  },
+  publicRuntimeConfig: {
+    port: process.env.PORT || 10000
+  }
 }
 
 module.exports = nextConfig 
