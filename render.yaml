@@ -2,7 +2,7 @@ services:
   - type: web
     name: orderkaro
     runtime: node
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm start
     envVars:
       - key: NEXT_PUBLIC_SUPABASE_URL
@@ -10,4 +10,19 @@ services:
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
         value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0ZXR6Y3FvbGV6b3JyY2VndGtmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1NDYwNjgsImV4cCI6MjA2MjEyMjA2OH0.f_RecDERFMBYzffSAzkx3vgENZuaRT5WiFXoL6Na-ss
       - key: NODE_ENV
-        value: production 
+        value: production
+      - key: NEXT_PUBLIC_SITE_URL
+        value: https://grocery-app-y6ty.onrender.com
+    buildFilter:
+      paths:
+        - src/**/*.js
+        - src/**/*.jsx
+        - src/**/*.ts
+        - src/**/*.tsx
+        - public/**/*
+        - next.config.js
+        - tsconfig.json
+        - tailwind.config.js
+        - postcss.config.js
+        - package.json
+        - package-lock.json 

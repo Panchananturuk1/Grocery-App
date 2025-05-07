@@ -12,6 +12,16 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   output: 'standalone',
+  images: {
+    domains: ['images.unsplash.com', 'img.icons8.com', 'itetzcqolezorrcegtkf.supabase.co'],
+    unoptimized: process.env.NODE_ENV !== 'production',
+  },
+  experimental: {
+    externalDir: true,
+    esmExternals: 'loose',
+  },
+  reactStrictMode: false,
+  swcMinify: true,
 }
 
 module.exports = nextConfig 
