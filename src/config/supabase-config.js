@@ -19,4 +19,4 @@ const DB_CONFIG = {
   }
 };
 
-export default DB_CONFIG; 
+module.exports = DB_CONFIG; 

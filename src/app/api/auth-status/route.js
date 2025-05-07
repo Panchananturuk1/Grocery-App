@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import supabase from '../../../utils/supabase';
 
-export async function GET(request) {
+export async function GET() {
   try {
     // Get the session from Supabase
     const { data: { session } } = await supabase.auth.getSession();

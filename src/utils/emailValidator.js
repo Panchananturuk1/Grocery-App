@@ -106,7 +106,10 @@ export function suggestAlternativeEmails(email) {
   return [...new Set(suggestions)]; // Remove duplicates
 }
 
-export default {
+// Create a named object for export
+const emailValidator = {
   validateAndSanitizeEmail,
   suggestAlternativeEmails
-}; 
+};
+
+export default emailValidator; 

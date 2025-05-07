@@ -10,22 +10,11 @@ import toast from 'react-hot-toast';
 
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState(null);
+  const [userData, setUserData] = useState(null);
   const [fullName, setFullName] = useState('');
   const [editing, setEditing] = useState(false);
   const { user, isAuthenticated } = useAuth();
   const router = useRouter();
-
-  useEffect(() => {
-    if (!isAuthenticated && !loading) {
-      router.push('/login');
-      return;
-    }
-
-    if (user) {
-      fetchProfile();
-    }
-  }, [user, isAuthenticated]);
 
   const fetchProfile = async () => {
     setLoading(true);
@@ -41,7 +30,7 @@ export default function ProfilePage() {
         throw error;
       }
 
-      setProfile(data);
+      setUserData(data);
       setFullName(data?.full_name || user?.user_metadata?.full_name || '');
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -51,6 +40,17 @@ export default function ProfilePage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!isAuthenticated && !loading) {
+      router.push('/login');
+      return;
+    }
+
+    if (user) {
+      fetchProfile();
+    }
+  }, [user, isAuthenticated, loading, router, fetchProfile]);
 
   const handleUpdateProfile = async () => {
     setLoading(true);
