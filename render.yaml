@@ -2,7 +2,7 @@ services:
   - type: web
     name: orderkaro
     runtime: node
-    buildCommand: npm install && NEXT_DEBUG_BUILD=true npm run build
+    buildCommand: npm install && npm install --save tailwindcss@^3.3.0 postcss@^8.4.0 autoprefixer@^10.4.0 && npx tailwindcss init -p && NEXT_DEBUG_BUILD=true npm run build
     startCommand: npm start
     envVars:
       - key: NEXT_PUBLIC_SUPABASE_URL
