@@ -99,17 +99,32 @@ If you see errors like:
 
 ```
 Module not found: Can't resolve '@/components/layout/MainLayout'
+Module not found: Can't resolve '@/context/CartContext'
 ```
 
 Solutions:
-1. Use relative imports instead of path aliases (e.g., '../components/layout/MainLayout')
-2. Make sure tsconfig.json has the proper path configuration:
+1. Update all import statements to use relative paths instead of path aliases:
+   ```js
+   // Change from:
+   import { useCart } from '@/context/CartContext';
+   
+   // To:
+   import { useCart } from '../../context/CartContext';
+   ```
+   
+2. Use grep or search functionality to find all instances of path aliases:
+   ```
+   grep -r "from '@/" --include="*.js" --include="*.jsx" --include="*.ts" --include="*.tsx" src/
+   ```
+
+3. Make sure tsconfig.json has the proper path configuration:
    ```json
    "paths": {
      "@/*": ["./src/*"]
    }
    ```
-3. Add a jsconfig.json file if working primarily with JavaScript
+
+4. Add a jsconfig.json file if working primarily with JavaScript
 
 ### Other Common Issues
 

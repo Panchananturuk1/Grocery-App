@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { FiShoppingCart, FiAlertCircle } from 'react-icons/fi';
-import { useCart } from '@/context/CartContext';
+import { useCart } from '../../context/CartContext';
 import { toast } from 'react-hot-toast';
 
 export default function ProductCard({ product }) {
