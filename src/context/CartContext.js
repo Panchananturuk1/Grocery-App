@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
-import supabase from '@/utils/supabase';
-import axios from 'axios';
+import supabase from '../utils/supabase';
 import { toast } from 'react-hot-toast';
 
 const CartContext = createContext();
@@ -23,6 +22,8 @@ export const CartProvider = ({ children }) => {
 
   // Fetch cart items from database
   const fetchCartItems = async () => {
+    if (!user) return;
+    
     setLoading(true);
     try {
       const { data: cartData, error } = await supabase
@@ -218,7 +219,17 @@ export const CartProvider = ({ children }) => {
 export const useCart = () => {
   const context = useContext(CartContext);
   if (context === undefined) {
-    throw new Error('useCart must be used within a CartProvider');
+    // Return default cart context if not available
+    return { 
+      cartItems: [], 
+      loading: false, 
+      totalItems: 0, 
+      totalPrice: 0,
+      addToCart: async () => false,
+      updateQuantity: async () => false,
+      removeFromCart: async () => false,
+      clearCart: async () => false
+    };
   }
   return context;
 };

@@ -2,6 +2,7 @@
 
 import Header from './Header';
 import Footer from './Footer';
+import AuthDebug from '../AuthDebug';
 
 export default function MainLayout({ children }) {
   return (
@@ -9,6 +10,7 @@ export default function MainLayout({ children }) {
       <Header />
       <main className="flex-grow">{children}</main>
       <Footer />
+      <AuthDebug />
     </div>
   );
 } 

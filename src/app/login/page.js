@@ -1,34 +1,136 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
-import MainLayout from '@/components/layout/MainLayout';
-import { FiMail, FiLock, FiLoader } from 'react-icons/fi';
+import MainLayout from '../../components/layout/MainLayout';
+import { FiMail, FiLock, FiLoader, FiAlertCircle } from 'react-icons/fi';
+import toast from 'react-hot-toast';
+import supabase from '../../utils/supabase';
+import { useAuth } from '../../context/AuthContext'; 
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState({});
-  const { login, loading } = useAuth();
+  const [loginError, setLoginError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [formErrors, setFormErrors] = useState({
+    email: '',
+    password: ''
+  });
   const router = useRouter();
+  const { user } = useAuth();
+  
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        // Check if user is already authenticated via context
+        if (user) {
+          console.log('Login page: User already logged in, redirecting to home');
+          router.push('/');
+          return;
+        }
+        
+        // Double-check with Supabase directly
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          console.log('Login page: Session found, redirecting to home');
+          router.push('/');
+        }
+      } catch (err) {
+        console.error('Login page auth check error:', err);
+      }
+    };
+    
+    checkAuth();
+  }, [user, router]);
+
+  // Clear field-specific error when user types
+  useEffect(() => {
+    if (email && formErrors.email) {
+      setFormErrors(prev => ({ ...prev, email: '' }));
+    }
+  }, [email]);
+
+  useEffect(() => {
+    if (password && formErrors.password) {
+      setFormErrors(prev => ({ ...prev, password: '' }));
+    }
+  }, [password]);
 
   const validateForm = () => {
-    const newErrors = {};
-    if (!email) newErrors.email = 'Email is required';
-    if (!password) newErrors.password = 'Password is required';
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    let isValid = true;
+    const errors = { email: '', password: '' };
+
+    // Email validation
+    if (!email) {
+      errors.email = 'Email is required';
+      isValid = false;
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      errors.email = 'Please enter a valid email address';
+      isValid = false;
+    }
+
+    // Password validation
+    if (!password) {
+      errors.password = 'Password is required';
+      isValid = false;
+    }
+
+    setFormErrors(errors);
+    return isValid;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    setLoginError('');
+    
+    if (!validateForm()) {
+      return;
+    }
+    
+    setLoading(true);
 
-    const result = await login(email, password);
-    if (result.success) {
-      router.push('/');
+    try {
+      console.log('Attempting login with email:', email);
+      // Login directly with Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        let errorMessage = 'Login failed. Please try again.';
+        
+        // Provide more specific error messages based on the error
+        if (error.message.includes('Invalid login credentials')) {
+          errorMessage = 'Invalid email or password. Please try again.';
+        } else if (error.message.includes('Email not confirmed')) {
+          errorMessage = 'Please verify your email before logging in. Check your inbox for a confirmation link.';
+        } else if (error.message.toLowerCase().includes('network')) {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        }
+        
+        setLoginError(errorMessage);
+        toast.error(errorMessage);
+        console.error('Login error:', error);
+      } else {
+        console.log('Login successful, user:', data?.user?.email);
+        toast.success('Logged in successfully');
+        
+        // Force a small delay to allow auth state to propagate
+        setTimeout(() => {
+          router.push('/');
+        }, 500);
+      }
+    } catch (err) {
+      const errorMsg = err.message || 'Login failed. Please try again.';
+      setLoginError(errorMsg);
+      toast.error(errorMsg);
+      console.error('Login exception:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -43,6 +145,13 @@ export default function Login() {
             </div>
 
             <form onSubmit={handleSubmit} className="py-6 px-8">
+              {loginError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded flex items-start">
+                  <FiAlertCircle className="mr-2 mt-0.5 flex-shrink-0" />
+                  <span>{loginError}</span>
+                </div>
+              )}
+            
               <div className="mb-6">
                 <label htmlFor="email" className="block text-gray-700 text-sm font-medium mb-2">
                   Email Address
@@ -55,14 +164,19 @@ export default function Login() {
                     id="email"
                     type="email"
                     className={`w-full pl-10 pr-3 py-2 border ${
-                      errors.email ? 'border-red-500' : 'border-gray-300'
-                    } rounded-md focus:outline-none focus:ring-2 focus:ring-green-500`}
+                      formErrors.email ? 'border-red-500' : 'border-gray-300'
+                    } rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 bg-white text-gray-900`}
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
-                {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+                {formErrors.email && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <FiAlertCircle className="mr-1" size={14} />
+                    {formErrors.email}
+                  </p>
+                )}
               </div>
 
               <div className="mb-6">
@@ -77,33 +191,19 @@ export default function Login() {
                     id="password"
                     type="password"
                     className={`w-full pl-10 pr-3 py-2 border ${
-                      errors.password ? 'border-red-500' : 'border-gray-300'
-                    } rounded-md focus:outline-none focus:ring-2 focus:ring-green-500`}
+                      formErrors.password ? 'border-red-500' : 'border-gray-300'
+                    } rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 bg-white text-gray-900`}
                     placeholder="********"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
-                {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
-              </div>
-
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center">
-                  <input
-                    id="remember-me"
-                    type="checkbox"
-                    className="h-4 w-4 border-gray-300 rounded text-green-600 focus:ring-green-500"
-                  />
-                  <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
-                    Remember me
-                  </label>
-                </div>
-                <Link
-                  href="/forgot-password"
-                  className="text-sm text-green-600 hover:text-green-500"
-                >
-                  Forgot your password?
-                </Link>
+                {formErrors.password && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <FiAlertCircle className="mr-1" size={14} />
+                    {formErrors.password}
+                  </p>
+                )}
               </div>
 
               <button

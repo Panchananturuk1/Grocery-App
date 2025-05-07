@@ -1,111 +1,107 @@
-# OrderKaro - Fresh Grocery Delivery App
+# OrderKaro - Grocery Delivery App
 
-OrderKaro is a full-stack grocery delivery application built with Next.js, Express, and Supabase, allowing users to browse and order fresh groceries online.
+OrderKaro is a complete grocery delivery application built with Next.js, Supabase, and Tailwind CSS.
 
 ## Features
 
-- **User Authentication**: Secure login and registration using JWT
-- **Product Browsing**: Browse products by categories with search and filtering
-- **Shopping Cart**: Add products to cart, update quantities, and checkout
-- **Order Management**: View order history and track current orders
-- **User Profile**: Manage account details and delivery addresses
-- **Responsive Design**: Works seamlessly on both mobile and desktop
+- User authentication (signup, login, profile management)
+- Product browsing and searching
+- Shopping cart functionality
+- Order placement and tracking
+- Admin dashboard for managing products and orders
 
 ## Tech Stack
 
-### Frontend
-- Next.js with TypeScript
-- Tailwind CSS for styling
-- React Query for data fetching
-- React Context for state management
-- React Hot Toast for notifications
-
-### Backend
-- Express.js server
-- Supabase (PostgreSQL database)
-- JWT for authentication
-- Multer for file uploads
-- Razorpay for payment processing
-
-## Project Structure
-
-```
-/
-├── src/                  # Frontend source code
-│   ├── app/              # Next.js app directory
-│   ├── components/       # Reusable UI components
-│   ├── context/          # React context providers
-│   ├── utils/            # Utility functions
-│   └── providers/        # Providers wrapper
-│
-├── backend/              # Backend source code
-│   ├── controllers/      # Request handlers
-│   ├── routes/           # API routes
-│   ├── middleware/       # Express middleware
-│   ├── config/           # Configuration files
-│   ├── database/         # Database schema and migrations
-│   └── index.js          # Server entry point
-│
-├── public/               # Static assets
-└── package.json          # Project dependencies and scripts
-```
+- **Frontend**: Next.js, React, Tailwind CSS
+- **Backend**: Supabase (PostgreSQL)
+- **Authentication**: Supabase Auth
+- **State Management**: React Context API
+- **Styling**: Tailwind CSS
 
 ## Getting Started
 
 ### Prerequisites
-- Node.js (v18+)
+
+- Node.js (v16+)
 - npm or yarn
 - Supabase account
 
 ### Installation
 
-1. Clone the repository
-```bash
-git clone https://github.com/Panchananturuk1/Grocery-App.git
-cd Grocery-App
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/OrderKaro.git
+   cd OrderKaro
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   # or
+   yarn install
+   ```
+
+3. Create a `.env.local` file in the root directory with your Supabase credentials:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=https://itetzcqolezorrcegtkf.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0ZXR6Y3FvbGV6b3JyY2VndGtmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1NDYwNjgsImV4cCI6MjA2MjEyMjA2OH0.f_RecDERFMBYzffSAzkx3vgENZuaRT5WiFXoL6Na-ss
+   ```
+
+4. Run the development server:
+   ```bash
+   npm run dev
+   # or
+   yarn dev
+   ```
+
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Database Setup
+
+1. Visit [http://localhost:3000/db-setup](http://localhost:3000/db-setup) after starting the development server
+2. Follow the instructions on the page to set up your Supabase database
+
+## Folder Structure
+
+```
+OrderKaro/
+├── public/               # Static assets
+├── src/
+│   ├── app/              # Next.js app directory
+│   │   ├── api/          # API routes
+│   │   ├── (pages)/      # App pages
+│   ├── components/       # React components
+│   ├── context/          # Context providers
+│   │   ├── AuthContext.js   # Authentication context
+│   │   └── CartContext.js   # Shopping cart context
+│   ├── utils/            # Utility functions
+│   │   └── supabase.js   # Supabase client
+│   └── config/           # Configuration files
+├── .env.local            # Environment variables (create this)
+└── README.md             # Project documentation
 ```
 
-2. Install frontend dependencies
-```bash
-npm install
-```
+## Authentication
 
-3. Install backend dependencies
-```bash
-cd backend
-npm install
-```
+The app uses Supabase Authentication. To test:
 
-4. Set up environment variables:
+1. Create an account at [http://localhost:3000/register](http://localhost:3000/register)
+2. Login at [http://localhost:3000/login](http://localhost:3000/login)
 
-Create `.env.local` in the root directory with:
-```
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
+## Troubleshooting
 
-Create `.env` in the backend directory with:
-```
-SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_service_key
-JWT_SECRET=your_jwt_secret
-PORT=5000
-```
+If you encounter any issues with the database setup:
 
-5. Start the backend server
-```bash
-cd backend
-npm run dev
-```
+1. Navigate to the `/db-setup` page in the app
+2. Check if the tables exist in your Supabase project
+3. If needed, manually run the SQL setup script through the Supabase dashboard
 
-6. Start the frontend development server
-```bash
-# From the root directory
-npm run dev
-```
+## License
 
-7. Open [http://localhost:3000](http://localhost:3000) in your browser
+This project is licensed under the MIT License.
 
-## Contact
+## Acknowledgements
 
-- [Panchanan Turuk](https://github.com/Panchananturuk1) - Developer
+- Next.js Team for the amazing framework
+- Supabase for the powerful backend platform
+- Tailwind CSS for the utility-first CSS framework
