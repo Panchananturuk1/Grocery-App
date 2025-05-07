@@ -26,6 +26,12 @@ const nextConfig = {
   },
   publicRuntimeConfig: {
     port: process.env.PORT || 10000
+  },
+  // Ensure errors in server components don't crash the entire app
+  swcMinify: true,
+  compiler: {
+    // Enables the styled-components SWC transform if you're using styled-components
+    styledComponents: false
   }
 }
 

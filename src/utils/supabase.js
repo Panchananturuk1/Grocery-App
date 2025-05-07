@@ -1,5 +1,7 @@
+'use client';
+
 const { createClient } = require('@supabase/supabase-js');
-const DB_CONFIG = require('../config/supabase-config');
+// const DB_CONFIG = require('../config/supabase-config');
 
 // Get Supabase credentials from environment variables or hardcoded config
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://itetzcqolezorrcegtkf.supabase.co';
@@ -11,15 +13,34 @@ console.log('Supabase configuration:', {
   hasKey: !!supabaseKey
 });
 
-// Create Supabase client
-const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true, 
-    detectSessionInUrl: true
-  }
-});
-
-console.log('Supabase client initialized');
+// Create Supabase client with error handling
+let supabase;
+try {
+  supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true, 
+      detectSessionInUrl: true
+    }
+  });
+  console.log('Supabase client initialized successfully');
+} catch (error) {
+  console.error('Error initializing Supabase client:', error);
+  // Provide fallback client that logs errors
+  supabase = {
+    auth: {
+      getSession: async () => ({ data: { session: null }, error: new Error('Supabase client initialization failed') }),
+      getUser: async () => ({ data: { user: null }, error: new Error('Supabase client initialization failed') }),
+      signInWithPassword: async () => ({ data: null, error: new Error('Supabase client initialization failed') }),
+      signUp: async () => ({ data: null, error: new Error('Supabase client initialization failed') }),
+      signOut: async () => ({ error: new Error('Supabase client initialization failed') }),
+      onAuthStateChange: () => ({ data: { subscription: null } })
+    },
+    from: () => ({
+      insert: async () => ({ error: new Error('Supabase client initialization failed') }),
+      select: async () => ({ data: null, error: new Error('Supabase client initialization failed') })
+    })
+  };
+}
 
 module.exports = supabase; 

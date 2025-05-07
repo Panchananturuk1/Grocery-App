@@ -7,8 +7,10 @@ import { useAuth } from '../../context/AuthContext';
 import supabase from '../../utils/supabase';
 import MainLayout from '../../components/layout/MainLayout';
 import toast from 'react-hot-toast';
+import ClientWrapper from '../../components/ClientWrapper';
 
-export default function ProfilePage() {
+// This is the actual component that uses useAuth
+function ProfileContent() {
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState(null);
   const [fullName, setFullName] = useState('');
@@ -50,7 +52,7 @@ export default function ProfilePage() {
     if (user) {
       fetchProfile();
     }
-  }, [user, isAuthenticated, loading, router, fetchProfile]);
+  }, [user, isAuthenticated, loading, router]);
 
   const handleUpdateProfile = async () => {
     setLoading(true);
@@ -162,5 +164,14 @@ export default function ProfilePage() {
         </div>
       </div>
     </MainLayout>
+  );
+}
+
+// Export the wrapped component
+export default function ProfilePage() {
+  return (
+    <ClientWrapper>
+      <ProfileContent />
+    </ClientWrapper>
   );
 } 

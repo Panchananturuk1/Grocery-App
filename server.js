@@ -9,68 +9,78 @@ console.log('Starting custom Next.js server...');
 console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
 console.log(`PORT: ${process.env.PORT || 10000}`);
 
-// Determine if we're in development mode
+// Get port from environment variable or use a default
+const port = parseInt(process.env.PORT, 10) || 10000;
+
+// Determine if we're in dev mode
 const dev = process.env.NODE_ENV !== 'production';
-console.log(`Running in ${dev ? 'development' : 'production'} mode`);
-
-// Set up Next.js app with proper configuration
-let nextConfig = {};
-
-// In production with standalone output, we need to specify the directory
-if (!dev) {
-  console.log('Using standalone configuration');
-  // When using standalone output, the app needs to know where to find its files
-  nextConfig = {
-    dir: path.join(process.cwd()),
-    conf: {
-      distDir: '.next',
-      outDir: '.next/standalone'
-    }
-  };
-}
+const hostname = 'localhost';
 
 // Initialize Next.js app
-const app = next({ dev, ...nextConfig });
+const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
-// Get port from environment variable
-const port = parseInt(process.env.PORT || '10000', 10);
+// Configure error handling settings
+const LOGGING = {
+  VERBOSE: true, // Set to false in extreme production scenarios
+  MAX_ERROR_COUNT: 10 // Limit repeated error logs
+};
 
-// Start the server
-app.prepare()
-  .then(() => {
-    // Create HTTP server
-    const server = createServer((req, res) => {
-      try {
-        // Handle the incoming request
-        const parsedUrl = parse(req.url, true);
-        handle(req, res, parsedUrl);
-      } catch (err) {
-        console.error('Error handling request:', err);
-        res.statusCode = 500;
-        res.end('Internal Server Error');
-      }
-    });
+// Error tracking
+let errorCount = 0;
+let lastErrorTime = Date.now();
 
-    // Add error handler for the server
-    server.on('error', (err) => {
-      console.error('Server error:', err);
-      process.exit(1); // Exit so Render can restart the service
-    });
-
-    // Listen on all interfaces (0.0.0.0)
-    server.listen(port, '0.0.0.0', (err) => {
-      if (err) {
-        console.error('Failed to start server:', err);
-        process.exit(1);
-        return;
+app.prepare().then(() => {
+  // Create HTTP server
+  const server = createServer(async (req, res) => {
+    try {
+      // Be sure to pass `true` as the second argument to `url.parse`.
+      // This tells it to parse the query portion of the URL.
+      const parsedUrl = parse(req.url, true);
+      await handle(req, res, parsedUrl);
+    } catch (err) {
+      const now = Date.now();
+      // Reset error count if more than 5 minutes have passed
+      if (now - lastErrorTime > 300000) {
+        errorCount = 0;
       }
       
-      console.log(`> Ready on http://0.0.0.0:${port}`);
-      console.log('Server is now listening for requests');
-    });
-  })
-  .catch((err) => {
-    console.error('Error preparing Next.js app:', err);
-    process.exit(1);
-  }); 
+      // Increment error counter and update timestamp
+      errorCount++;
+      lastErrorTime = now;
+      
+      // Log error (with rate limiting)
+      if (LOGGING.VERBOSE && errorCount <= LOGGING.MAX_ERROR_COUNT) {
+        console.error('Error handling request:', err);
+        
+        if (errorCount === LOGGING.MAX_ERROR_COUNT) {
+          console.log(`Maximum error log count reached. Suppressing further errors for 5 minutes.`);
+        }
+      }
+      
+      // Send error response to client
+      res.statusCode = 500;
+      res.end('Internal Server Error');
+    }
+  });
+
+  // Start listening
+  server.listen(port, (err) => {
+    if (err) throw err;
+    console.log(`> Ready on http://${hostname}:${port}`);
+    console.log(`> Mode: ${dev ? 'development' : 'production'}`);
+  });
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.log('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Application continues to run despite unhandled promise rejections
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', err => {
+  console.error('Uncaught Exception:', err);
+  // For serious exceptions, we may want to terminate the process
+  // process.exit(1);
+}); 

@@ -1,6 +1,12 @@
-import type { Metadata } from "next";
+'use client';
+
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Toaster } from 'react-hot-toast';
+import { AuthProvider } from "../context/AuthContext";
+import { CartProvider } from "../context/CartContext";
+// Metadata is now imported from a separate file to avoid 'use client' issues
+// import { metadata } from './metadata';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -12,10 +18,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "OrderKaro - Fresh Groceries Delivered",
-  description: "Order fresh groceries online and get them delivered to your doorstep",
-};
+// Metadata is defined in metadata.ts
 
 export default function RootLayout({
   children,
@@ -27,7 +30,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <AuthProvider>
+          <CartProvider>
+            <Toaster position="top-center" />
+            {children}
+          </CartProvider>
+        </AuthProvider>
       </body>
     </html>
   );
