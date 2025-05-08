@@ -3,6 +3,7 @@
 import logger from './logger';
 import supabase from './supabase';
 import toast from 'react-hot-toast';
+import toastManager from './toast-manager'; // Use manager for consistency
 
 // Keep track of initialization attempts to prevent spam
 let initializationAttempts = 0;
@@ -19,25 +20,23 @@ const createTablesIfNotExist = async () => {
     const { error: profilesError } = await supabase.rpc('create_profiles_if_not_exists', {});
     
     if (profilesError) {
-      // If RPC method doesn't exist, try direct SQL (only works with service role key)
-      logger.logWarn('Failed to create tables via RPC, trying direct fallback approach', 'db-setup');
+      logger.logWarn(`RPC create_profiles_if_not_exists failed (Code: ${profilesError.code}). Checking table presence.`, 'db-setup');
       
-      // Use the REST API to check if table exists
       const { error: tableCheckError } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id', { count: 'exact', head: true })
         .limit(1);
       
       if (tableCheckError && tableCheckError.code === '42P01') {
-        // Table doesn't exist - we need to handle this gracefully
-        logger.logWarn('Profiles table does not exist, app will use in-memory mode', 'db-setup');
+        logger.logError('Profiles table does not exist and RPC failed. Manual setup likely required.', 'db-setup');
         return false;
+      } else if (tableCheckError) {
+        logger.logError(`Error checking profiles table existence: ${tableCheckError.message}`, 'db-setup');
       }
     }
-    
     return true;
   } catch (error) {
-    logger.logError('Error creating tables:', 'db-setup', error);
+    logger.logError(`Exception creating/checking tables: ${error.message}`, 'db-setup', error);
     return false;
   }
 };
@@ -52,7 +51,6 @@ export const setupDatabase = async (userId) => {
   }
 
   try {
-    // Skip if we've attempted too many times in a short period
     const now = Date.now();
     if (initializationAttempts >= MAX_ATTEMPTS && now - lastInitTime < COOLDOWN_PERIOD) {
       logger.logWarn('Too many database initialization attempts, cooling down', 'db-setup');
@@ -62,46 +60,43 @@ export const setupDatabase = async (userId) => {
     initializationAttempts++;
     lastInitTime = now;
 
-    // Check Supabase connection first
+    // Check Supabase connection first with timeout (this one is okay as it uses AbortController)
     try {
-      // Verify basic connectivity
-      const { data, error } = await supabase.auth.getSession();
+      logger.logDebug('Checking Supabase connection (getSession)', 'db-setup');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const { data, error } = await supabase.auth.getSession({ signal: controller.signal });
+      clearTimeout(timeoutId);
       
       if (error) {
-        logger.logError('Database connection error:', 'db-setup', error);
-        return { 
-          success: false, 
-          error, 
-          message: 'Unable to connect to database. Please check your internet connection.'
-        };
+        if (error.name === 'AbortError') {
+           logger.logWarn('Database connection check (getSession) timed out', 'db-setup');
+           return { success: false, error, message: 'Connection check timed out. Please try again.' };
+        } else {
+          logger.logError('Database connection error (getSession):', 'db-setup', error);
+          return { success: false, error, message: 'Unable to verify connection. Please check your network.' };
+        }
       }
-      
       logger.logInfo('Database connection verified', 'db-setup');
     } catch (connError) {
-      logger.logError('Database connection failed:', 'db-setup', connError);
-      return { 
-        success: false, 
-        error: connError, 
-        message: 'Unable to connect to database. Please check your internet connection.'
-      };
+      logger.logError('Database connection failed unexpectedly:', 'db-setup', connError);
+      return { success: false, error: connError, message: 'Unable to connect to database. An unexpected error occurred.' };
     }
 
-    // Make sure required tables exist
     const tablesExist = await createTablesIfNotExist();
     if (!tablesExist) {
-      logger.logWarn('Required tables do not exist - using memory only mode', 'db-setup');
-      // We'll continue without failing, but features may be limited
+      logger.logError('Required core tables (e.g., profiles) do not exist or could not be created.', 'db-setup');
+      return { success: false, error: 'Core tables missing', message: 'Essential database tables are missing. Please run the database setup script or contact support.' };
     }
 
-    // Try to create/update the user profile
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
-      
-      if (user) {
-        // Only try to create the profile if tables exist
-        if (tablesExist) {
-          // Use upsert instead of insert to handle both create and update cases
+      const { data: userData, error: getUserError } = await supabase.auth.getUser();
+      if (getUserError) {
+        logger.logWarn('Could not get user data for profile setup:', 'db-setup', getUserError);
+      } else {
+        const user = userData?.user;
+        if (user) {
+          logger.logDebug('Attempting to upsert profile for user:', 'db-setup', user.email);
           const { error: upsertError } = await supabase
             .from('profiles')
             .upsert({
@@ -115,35 +110,23 @@ export const setupDatabase = async (userId) => {
             });
             
           if (upsertError) {
-            if (upsertError.code === '42P01') {
-              // Table doesn't exist, we'll continue in memory-only mode
-              logger.logWarn('Profiles table not available, using memory mode', 'db-setup');
-            } else {
-              logger.logError('Error creating user profile:', 'db-setup', upsertError);
-              // We won't fail the setup for this
-            }
+            logger.logWarn(`Failed to upsert profile (Code: ${upsertError.code}): ${upsertError.message}`, 'db-setup');
           } else {
             logger.logInfo('User profile created/updated successfully', 'db-setup');
           }
         }
       }
     } catch (profileError) {
-      logger.logError('Error handling user profile:', 'db-setup', profileError);
-      // Continue anyway - non-fatal error
+      logger.logWarn(`Error during profile handling: ${profileError.message}`, 'db-setup', profileError);
     }
 
-    // Success case - even with table issues, we'll return success to allow app to function
     logger.logInfo('Database setup completed', 'db-setup');
-    // Reset attempt counter on success
     initializationAttempts = 0;
     return { success: true };
+
   } catch (error) {
-    logger.logError('Error setting up database:', 'db-setup', error);
-    return { 
-      success: false, 
-      error, 
-      message: 'Unexpected error during database setup. Check console for details.'
-    };
+    logger.logError(`Unexpected error during database setup: ${error.message}`, 'db-setup', error);
+    return { success: false, error, message: 'An unexpected error occurred during database setup.' };
   }
 };
 
@@ -152,38 +135,34 @@ export const setupDatabase = async (userId) => {
  */
 export const ensureProductsTableExists = async () => {
   try {
-    // First check if the table exists
+    logger.logDebug('Ensuring products table exists...', 'db-setup');
     const { error: checkError } = await supabase
       .from('products')
-      .select('id')
+      .select('id', { count: 'exact', head: true })
       .limit(1);
     
-    // If we can query the table, it exists
     if (!checkError) {
       logger.logInfo('Products table exists', 'db-setup');
       return true;
     }
     
-    // If table doesn't exist (code 42P01), create it
-    if (checkError && checkError.code === '42P01') {
-      logger.logWarn('Products table does not exist, attempting to create', 'db-setup');
-      
-      // Try to create the table with RPC (requires SQL function)
+    if (checkError.code === '42P01') {
+      logger.logWarn('Products table does not exist, attempting to create via RPC...', 'db-setup');
       const { error: rpcError } = await supabase.rpc('create_products_table_if_not_exists', {});
       
       if (rpcError) {
-        logger.logError('Failed to create products table:', 'db-setup', rpcError);
+        logger.logError(`Failed to create products table via RPC: ${rpcError.message}`, 'db-setup', rpcError);
         return false;
+      } else {
+        logger.logInfo('Products table created successfully via RPC', 'db-setup');
+        return true;
       }
-      
-      logger.logInfo('Products table created successfully', 'db-setup');
-      return true;
+    } else {
+      logger.logError(`Error checking products table: ${checkError.message}`, 'db-setup', checkError);
+      return false;
     }
-    
-    logger.logError('Error checking products table:', 'db-setup', checkError);
-    return false;
   } catch (error) {
-    logger.logError('Error ensuring products table exists:', 'db-setup', error);
+    logger.logError(`Exception ensuring products table exists: ${error.message}`, 'db-setup', error);
     return false;
   }
 };
@@ -193,30 +172,49 @@ export const ensureProductsTableExists = async () => {
  */
 export const initializeDatabase = async () => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    logger.logDebug('Initializing database...', 'db-setup');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession({ signal: controller.signal });
+    clearTimeout(timeoutId);
+    
+    if (sessionError) {
+       if (sessionError.name === 'AbortError') {
+         logger.logWarn('Initial getSession timed out', 'db-setup');
+       } else {
+         logger.logError('Error getting session during initialization:', 'db-setup', sessionError);
+       }
+       return false;
+    }
+    
     if (!session || !session.user) {
-      logger.logInfo('No authenticated user found for database setup', 'db-setup');
+      logger.logInfo('No authenticated user session found for database setup', 'db-setup');
       return false;
     }
     
     const result = await setupDatabase(session.user.id);
     
-    // Also ensure products table exists
-    await ensureProductsTableExists();
-    
     if (!result.success) {
-      if (initializationAttempts < MAX_ATTEMPTS) {
-        toast.error(result.message || 'Error setting up your account. Some features may not work correctly.', {
+      logger.logWarn('setupDatabase failed.', 'db-setup', result.error);
+      if (initializationAttempts <= MAX_ATTEMPTS) {
+        toastManager.error(result.message || 'Error setting up your account.', {
           id: 'db-setup-error',
-          duration: 5000
+          duration: 6000
         });
       }
       return false;
     }
     
+    const productsTableOk = await ensureProductsTableExists();
+    if (!productsTableOk) {
+       logger.logWarn('Products table check/creation failed. Product features may be limited.', 'db-setup');
+    }
+    
+    logger.logInfo('Database initialization sequence completed successfully.', 'db-setup');
     return true;
+
   } catch (error) {
-    logger.logError('Database initialization error:', 'db-setup', error);
+    logger.logError(`Top-level database initialization error: ${error.message}`, 'db-setup', error);
     return false;
   }
 }; 

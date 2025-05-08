@@ -3,21 +3,33 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { initializeDatabase } from '../utils/setup-db';
-import toast from 'react-hot-toast';
+import toastManager from '../utils/toast-manager';
 import logger from '../utils/logger';
 
 const DataContext = createContext();
 
 export function DataProvider({ children }) {
   const [isInitialized, setIsInitialized] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [isInitializing, setIsInitializing] = useState(false);
   const [hasError, setHasError] = useState(false);
   const { user, isAuthenticated } = useAuth();
-  // Add throttle tracking for errors
-  const lastErrorTime = useRef(0);
-  const errorToastShown = useRef(false);
+  const initAttempts = useRef(0);
+  const MAX_ATTEMPTS = 3;
+
+  // Clear error notifications on mount
+  useEffect(() => {
+    // Wait a bit after hydration
+    const timeoutId = setTimeout(() => {
+      toastManager.dismissErrors();
+    }, 800);
+    
+    return () => clearTimeout(timeoutId);
+  }, []);
 
   useEffect(() => {
+    let mounted = true;
+    let timeoutId = null;
+    
     const setupDatabase = async () => {
       if (!user || !isAuthenticated) {
         setIsInitializing(false);
@@ -25,56 +37,108 @@ export function DataProvider({ children }) {
       }
 
       // Prevent multiple concurrent initialization attempts
-      if (isInitializing) return;
+      if (isInitializing || isInitialized) return;
       
       setIsInitializing(true);
       try {
         const success = await initializeDatabase();
+        
+        if (!mounted) return;
+        
         setIsInitialized(success);
+        
         if (!success) {
           logger.logError('Failed to initialize database', 'db');
           setHasError(true);
           
-          // Show error toast only once per session or if 10 minutes have passed
-          const now = Date.now();
-          if (!errorToastShown.current || (now - lastErrorTime.current > 600000)) {
-            toast.error('Database setup issue. Check your Supabase SQL functions.', {
+          // Only show error on first attempt or after max retries
+          if (initAttempts.current === 0 || initAttempts.current >= MAX_ATTEMPTS) {
+            toastManager.error('Database setup issue. Please try again later.', {
               id: 'db-setup-error', // Use a consistent ID to prevent duplicates
-              duration: 5000
+              duration: 3000
             });
-            lastErrorTime.current = now;
-            errorToastShown.current = true;
           }
+          
+          // Auto-retry with backoff if under max attempts
+          if (initAttempts.current < MAX_ATTEMPTS) {
+            initAttempts.current++;
+            const backoffTime = Math.min(1500 * Math.pow(1.5, initAttempts.current), 8000);
+            
+            timeoutId = setTimeout(() => {
+              if (mounted) {
+                setIsInitializing(false);
+                // Try again
+                setupDatabase();
+              }
+            }, backoffTime);
+            
+            return; // Don't reset isInitializing yet
+          }
+        } else {
+          // Success - reset error state and counter
+          setHasError(false);
+          initAttempts.current = 0;
+          
+          // Clear any error notifications on success
+          toastManager.dismissErrors();
         }
       } catch (error) {
+        if (!mounted) return;
+        
         logger.logError('Error initializing database:', 'db', error);
         setHasError(true);
         
-        // Show error toast only once per session or if 10 minutes have passed
-        const now = Date.now();
-        if (!errorToastShown.current || (now - lastErrorTime.current > 600000)) {
-          toast.error('Database connection error. Please try again later.', {
-            id: 'db-connect-error', // Use a consistent ID to prevent duplicates
-            duration: 5000
+        // Only show error on first attempt or after max retries
+        if (initAttempts.current === 0 || initAttempts.current >= MAX_ATTEMPTS) {
+          toastManager.error('Database connection error. Please check your internet connection.', {
+            id: 'db-connect-error', 
+            duration: 3000
           });
-          lastErrorTime.current = now;
-          errorToastShown.current = true;
+        }
+        
+        // Auto-retry with backoff if under max attempts
+        if (initAttempts.current < MAX_ATTEMPTS) {
+          initAttempts.current++;
+          const backoffTime = Math.min(1500 * Math.pow(1.5, initAttempts.current), 8000);
+          
+          timeoutId = setTimeout(() => {
+            if (mounted) {
+              setIsInitializing(false);
+              // Try again
+              setupDatabase();
+            }
+          }, backoffTime);
+          
+          return; // Don't reset isInitializing yet
         }
       } finally {
-        setIsInitializing(false);
+        if (mounted && !timeoutId) {
+          setIsInitializing(false);
+        }
       }
     };
 
     setupDatabase();
-  }, [user, isAuthenticated]);
+    
+    return () => {
+      mounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [user, isAuthenticated, isInitialized]);
 
   const retryInitialization = async () => {
     // Prevent retry if already initializing
     if (isInitializing) return;
     
+    // Reset states for retry
     setIsInitializing(true);
     setHasError(false);
-    errorToastShown.current = false;
+    initAttempts.current = 0;
+    
+    // Clear any existing error notifications
+    toastManager.dismissErrors();
     
     try {
       logger.logInfo('Retrying database initialization', 'db');
@@ -82,16 +146,16 @@ export function DataProvider({ children }) {
       setIsInitialized(success);
       
       if (success) {
-        toast.success('Database initialized successfully');
+        toastManager.success('Database initialized successfully');
         logger.logInfo('Database initialized successfully on retry', 'db');
       } else {
-        toast.error('Failed to initialize database');
+        toastManager.error('Failed to initialize database');
         logger.logError('Failed to initialize database on retry', 'db');
         setHasError(true);
       }
     } catch (error) {
       logger.logError('Error retrying database initialization:', 'db', error);
-      toast.error('Failed to initialize database');
+      toastManager.error('Failed to initialize database');
       setHasError(true);
     } finally {
       setIsInitializing(false);

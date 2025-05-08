@@ -249,6 +249,9 @@ export default function Header() {
           <Link href="/products" className="hover:text-green-200 flex items-center gap-1">
             <FiPackage className="inline" /> Products
           </Link>
+          <Link href="/categories" className="hover:text-green-200 flex items-center gap-1">
+            <FiList className="inline" /> Categories
+          </Link>
           
           {isAuthenticated ? (
             <div className="flex items-center space-x-4">

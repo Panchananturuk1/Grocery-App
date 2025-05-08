@@ -89,18 +89,6 @@ export default function Home() {
   return (
     <MainLayout>
       <div className="bg-gradient-to-b from-green-50 to-white min-h-screen">
-        {/* Database Diagnostic Banner */}
-        <div className="bg-blue-50 py-2 px-4">
-          <div className="container mx-auto max-w-6xl flex items-center justify-between">
-            <p className="text-sm text-blue-800">
-              Having trouble loading products or categories? 
-            </p>
-            <Link href="/diagnostics" className="text-sm text-blue-600 font-medium hover:text-blue-800">
-              Run Database Diagnostics →
-            </Link>
-          </div>
-        </div>
-        
         {/* Hero Section */}
         <section className="py-16 px-4">
           <div className="container mx-auto max-w-6xl">

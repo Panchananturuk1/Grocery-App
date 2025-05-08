@@ -13,43 +13,33 @@ const supabaseClient = createClient(supabaseUrl, supabaseKey, {
   }
 });
 
+// Track ping health status to avoid constant pings if connection is down
+let lastPingTime = 0;
+let consecutiveFailures = 0;
+const FAILURE_BACKOFF_MS = 30000; // 30 seconds
+
 export async function GET(request) {
   const startTime = Date.now();
-  const headers = request.headers;
+  
+  // Check headers
+  const headers = request.headers || new Headers();
   const environment = headers.get('X-Client-Env') || 'unknown';
   const isLocalhost = environment === 'localhost';
   
-  // Shorter timeout for localhost
-  const pingTimeout = isLocalhost ? 3000 : 5000;
-  
-  try {
-    // Simple lightweight query to test connectivity
-    // Add a timeout promise to prevent hanging
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error(`Query timeout after ${pingTimeout}ms`));
-      }, pingTimeout);
-    });
-    
-    // Create the query promise
-    const queryPromise = supabaseClient
-      .from('categories')  // Try categories instead of profiles
-      .select('count')
-      .limit(1);
-    
-    // Race the promises
-    const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
-    
-    if (error) {
-      console.error(`Ping failed (${environment}):`, error);
+  // Implement backoff for repeated failures to prevent constant hammering
+  if (consecutiveFailures > 2) {
+    const timeSinceLastPing = startTime - lastPingTime;
+    if (timeSinceLastPing < FAILURE_BACKOFF_MS) {
+      // Return cached error rather than pinging again
       return NextResponse.json({
         success: false,
-        message: error.message,
-        code: error.code,
-        duration: Date.now() - startTime,
+        cached: true,
+        message: 'Connection issues detected. Backing off from repeated attempts.',
+        failureCount: consecutiveFailures,
+        nextAttemptIn: Math.round((FAILURE_BACKOFF_MS - timeSinceLastPing) / 1000) + 's',
         environment
       }, { 
-        status: 500,
+        status: 503, // Service unavailable
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
           'Pragma': 'no-cache',
@@ -57,36 +47,89 @@ export async function GET(request) {
         }
       });
     }
+  }
+  
+  // Update last ping time
+  lastPingTime = startTime;
+  
+  // Use a more reasonable timeout that won't create excessive errors
+  const pingTimeout = isLocalhost ? 5000 : 8000;
+  
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), pingTimeout);
     
-    const duration = Date.now() - startTime;
-    const status = isLocalhost && duration > 1000 ? 'slow-local' : 
-                  !isLocalhost && duration > 2000 ? 'slow-prod' : 'good';
-    
-    return NextResponse.json({
-      success: true,
-      duration,
-      environment,
-      status
-    }, {
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
+    try {
+      // Perform a lightweight query to test connectivity
+      const { data, error } = await supabaseClient
+        .from('categories') // Assuming 'categories' is a small, public table
+        .select('id', { count: 'exact', head: true }) // Fetch only count, no data
+        .limit(1)
+        .abortSignal(controller.signal); // Pass the abort signal
+
+      // Clear timeout since the request completed or was aborted by Supabase client
+      clearTimeout(timeoutId);
+      
+      if (error) {
+        // If Supabase client itself aborted due to its internal timeout or an explicit abort
+        if (error.name === 'AbortError' || error.message.includes('aborted')) {
+          throw new Error('Supabase query timed out or was aborted');
+        }
+        // For other errors, treat as a failed ping
+        throw error;
       }
-    });
+      
+      // Reset failure counter on success
+      consecutiveFailures = 0;
+      
+      const duration = Date.now() - startTime;
+      const status = duration > 2000 ? 'slow' : 'good';
+      
+      return NextResponse.json({
+        success: true,
+        duration,
+        environment,
+        status,
+        // data: data // Optionally include data if needed for diagnostics
+      }, {
+        headers: {
+          'Cache-Control': 'private, max-age=0, no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+    } catch (queryError) {
+      // Ensure timeout is cleared if an error occurs before it fires
+      clearTimeout(timeoutId);
+      throw queryError; // Re-throw to be caught by the outer catch block
+    }
   } catch (error) {
-    console.error(`Ping error (${environment}):`, error);
+    // Increment failure counter
+    consecutiveFailures++;
+    
+    // Determine if it's a timeout
+    const isTimeout = error.name === 'AbortError' || 
+                      error.message?.toLowerCase().includes('timeout') || 
+                      error.message?.toLowerCase().includes('aborted');
+    
+    // Log but with reduced verbosity for timeouts
+    if (isTimeout) {
+      console.warn(`Ping timeout or aborted (${environment}): ${pingTimeout}ms`);
+    } else {
+      console.error(`Ping error (${environment}):`, error.message);
+    }
+    
     return NextResponse.json({
       success: false,
-      message: error.message,
+      message: isTimeout ? 'Connection timed out or aborted' : error.message,
+      isTimeout,
+      failureCount: consecutiveFailures,
       duration: Date.now() - startTime,
       environment
     }, { 
-      status: 500,
+      status: isTimeout ? 408 : 500, // Use proper timeout status code
       headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
+        'Cache-Control': 'private, max-age=0, no-cache',
+        'Pragma': 'no-cache'
       }
     });
   }

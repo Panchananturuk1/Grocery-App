@@ -1,7 +1,8 @@
 'use client';
 
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import { useDatabase } from '../hooks/useDatabase';
+import toastManager from '../utils/toast-manager';
 
 // Create context
 const DatabaseContext = createContext(null);
@@ -12,6 +13,16 @@ const DatabaseContext = createContext(null);
 export const DatabaseProvider = ({ children }) => {
   // Use the database hook to handle initialization
   const databaseState = useDatabase();
+  
+  // Clear any existing error toasts on mount
+  useEffect(() => {
+    // Wait until after hydration to clear toasts
+    const timeoutId = setTimeout(() => {
+      toastManager.dismissErrors();
+    }, 1000);
+    
+    return () => clearTimeout(timeoutId);
+  }, []);
   
   return (
     <DatabaseContext.Provider value={databaseState}>

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { FiShoppingCart, FiAlertCircle } from 'react-icons/fi';
+import { FiShoppingCart } from 'react-icons/fi';
 import { useCart } from '../../context/CartContext';
 import { toast } from 'react-hot-toast';
 
@@ -13,11 +13,6 @@ export default function ProductCard({ product }) {
 
   const handleAddToCart = async (e) => {
     e.preventDefault();
-    
-    if (product.stock < 1) {
-      toast.error('This product is out of stock');
-      return;
-    }
     
     setIsLoading(true);
     try {
@@ -47,36 +42,25 @@ export default function ProductCard({ product }) {
             className="object-cover rounded-md"
             unoptimized={!product.image_url || product.image_url.startsWith('http')}
           />
-          {product.stock < 1 && (
-            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-md">
-              <div className="bg-red-500 text-white py-1 px-3 rounded-full text-sm font-semibold flex items-center">
-                <FiAlertCircle className="mr-1" /> Out of Stock
-              </div>
-            </div>
-          )}
         </div>
         <h3 className="text-lg font-semibold text-black mb-1 line-clamp-2">{product.name}</h3>
+        {product.description && (
+          <p className="text-sm text-gray-500 mb-2 line-clamp-2">{product.description}</p>
+        )}
       </Link>
       
       <div className="mt-auto">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-gray-700">{product.categories?.name}</span>
-          <span className="font-bold text-green-600">₹{product.price}</span>
+        <div className="flex justify-end items-center mb-2">
+          <span className="font-bold text-lg text-green-600">₹{product.price}</span>
         </div>
         
         <button
           onClick={handleAddToCart}
-          className={`w-full py-2 rounded-md flex items-center justify-center transition-colors ${
-            product.stock < 1
-              ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
-              : 'bg-green-600 text-white hover:bg-green-700'
-          }`}
-          disabled={isLoading || product.stock < 1}
+          className={`w-full py-2 rounded-md flex items-center justify-center transition-colors bg-green-600 text-white hover:bg-green-700`}
+          disabled={isLoading}
         >
           {isLoading ? (
             <span className="animate-pulse">Adding...</span>
-          ) : product.stock < 1 ? (
-            'Out of Stock'
           ) : (
             <>
               <FiShoppingCart className="mr-2" /> Add to Cart
