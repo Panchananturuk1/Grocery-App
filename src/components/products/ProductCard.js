@@ -33,15 +33,19 @@ export default function ProductCard({ product }) {
     }
   };
 
+  // Fallback image - using a reliable placeholder service
+  const fallbackImage = 'https://via.placeholder.com/300x200/f3f4f6/000000?text=Product+Image';
+
   return (
     <div className="bg-white rounded-lg shadow p-4 flex flex-col h-full transition-shadow hover:shadow-md">
       <Link href={`/products/${product.id}`} className="block flex-grow">
         <div className="relative h-40 mb-4">
           <Image
-            src={product.image_url || '/images/product-placeholder.jpg'}
+            src={product.image_url || fallbackImage}
             alt={product.name}
             fill
             className="object-cover rounded-md"
+            unoptimized={!product.image_url || product.image_url.startsWith('http')}
           />
           {product.stock < 1 && (
             <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-md">
@@ -51,12 +55,12 @@ export default function ProductCard({ product }) {
             </div>
           )}
         </div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-1 line-clamp-2">{product.name}</h3>
+        <h3 className="text-lg font-semibold text-black mb-1 line-clamp-2">{product.name}</h3>
       </Link>
       
       <div className="mt-auto">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-gray-500">{product.categories?.name}</span>
+          <span className="text-gray-700">{product.categories?.name}</span>
           <span className="font-bold text-green-600">₹{product.price}</span>
         </div>
         

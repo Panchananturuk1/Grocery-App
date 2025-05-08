@@ -148,6 +148,47 @@ export const setupDatabase = async (userId) => {
 };
 
 /**
+ * Ensures the products table exists
+ */
+export const ensureProductsTableExists = async () => {
+  try {
+    // First check if the table exists
+    const { error: checkError } = await supabase
+      .from('products')
+      .select('id')
+      .limit(1);
+    
+    // If we can query the table, it exists
+    if (!checkError) {
+      logger.logInfo('Products table exists', 'db-setup');
+      return true;
+    }
+    
+    // If table doesn't exist (code 42P01), create it
+    if (checkError && checkError.code === '42P01') {
+      logger.logWarn('Products table does not exist, attempting to create', 'db-setup');
+      
+      // Try to create the table with RPC (requires SQL function)
+      const { error: rpcError } = await supabase.rpc('create_products_table_if_not_exists', {});
+      
+      if (rpcError) {
+        logger.logError('Failed to create products table:', 'db-setup', rpcError);
+        return false;
+      }
+      
+      logger.logInfo('Products table created successfully', 'db-setup');
+      return true;
+    }
+    
+    logger.logError('Error checking products table:', 'db-setup', checkError);
+    return false;
+  } catch (error) {
+    logger.logError('Error ensuring products table exists:', 'db-setup', error);
+    return false;
+  }
+};
+
+/**
  * Initialize database for the current user
  */
 export const initializeDatabase = async () => {
@@ -159,6 +200,10 @@ export const initializeDatabase = async () => {
     }
     
     const result = await setupDatabase(session.user.id);
+    
+    // Also ensure products table exists
+    await ensureProductsTableExists();
+    
     if (!result.success) {
       if (initializationAttempts < MAX_ATTEMPTS) {
         toast.error(result.message || 'Error setting up your account. Some features may not work correctly.', {

@@ -1,12 +1,16 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import MainLayout from '../../components/layout/MainLayout';
 import ProductCard from '../../components/products/ProductCard';
 import supabase from '../../utils/supabase';
-import { FiSearch, FiFilter, FiX } from 'react-icons/fi';
+import queryCache from '../../utils/cache-util';
+import { FiSearch, FiFilter, FiX, FiRefreshCw, FiDatabase } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
+import { initializeDatabase } from '../../utils/setup-db';
+import { setupProductsDatabase } from '../../utils/create-tables';
+import logger from '../../utils/logger';
 
 function ProductsContent() {
   const searchParams = useSearchParams();
@@ -17,6 +21,9 @@ function ProductsContent() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [error, setError] = useState(null);
+  const [lastFetchTime, setLastFetchTime] = useState(0);
+  const [refetchCount, setRefetchCount] = useState(0);
   
   // Filter states
   const [selectedCategory, setSelectedCategory] = useState(initialCategory || '');
@@ -24,19 +31,65 @@ function ProductsContent() {
   const [priceRange, setPriceRange] = useState([0, 10000]); // Default price range
   const [sortBy, setSortBy] = useState('newest'); // Default sort
 
+  // Ensure database is initialized
+  useEffect(() => {
+    const setupDb = async () => {
+      try {
+        await initializeDatabase();
+      } catch (err) {
+        logger.logError('Error initializing database from products page:', err);
+      }
+    };
+    
+    setupDb();
+  }, []);
+
   useEffect(() => {
     async function fetchCategories() {
       try {
+        console.log('Fetching categories...');
+        
+        // Check cache first
+        const cachedCategories = queryCache.get('categories', { sort: 'name' });
+        if (cachedCategories) {
+          console.log('Using cached categories data');
+          setCategories(cachedCategories);
+          return;
+        }
+        
+        // Use optimized supabase client
         const { data, error } = await supabase
           .from('categories')
           .select('*')
-          .order('name');
+          .order('name')
+          .withTimeout(30000) // 30 second timeout
+          .withRetry(3, 2000); // 3 retries with 2 second starting delay
         
-        if (error) throw error;
+        if (error) {
+          console.error('Categories error details:', error);
+          throw error;
+        }
+        
+        console.log('Categories data:', data ? `Found ${data.length} categories` : 'No data returned');
+        
+        // Store in cache
+        if (data) {
+          queryCache.set('categories', { sort: 'name' }, data);
+        }
+        
         setCategories(data || []);
       } catch (error) {
+        // Better error handling
+        const errorMessage = error.message || 'Unknown error';
+        const errorCode = error.code || 'No error code';
         console.error('Error fetching categories:', error);
-        toast.error('Failed to load categories');
+        console.error('Error details:', { message: errorMessage, code: errorCode });
+        
+        // Show a more detailed error message
+        toast.error(`Failed to load categories: ${errorMessage}`);
+        
+        // Set empty categories to avoid null issues
+        setCategories([]);
       }
     }
     
@@ -44,12 +97,50 @@ function ProductsContent() {
   }, []);
 
   useEffect(() => {
-    fetchProducts();
-  }, [selectedCategory, priceRange, sortBy]);
+    // Add debounce to prevent multiple fetches when filters change rapidly
+    const debounceTimer = setTimeout(() => {
+      if (Date.now() - lastFetchTime > 500) { // Only fetch if last fetch was >500ms ago
+        fetchProducts();
+      }
+    }, 300);
+    
+    return () => clearTimeout(debounceTimer);
+  }, [selectedCategory, priceRange, sortBy, searchQuery, lastFetchTime]);
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
+    // Don't fetch if we've recently fetched
+    if (Date.now() - lastFetchTime < 500 && refetchCount > 0) {
+      return;
+    }
+    
     setLoading(true);
+    setError(null);
+    setLastFetchTime(Date.now());
+    setRefetchCount(prev => prev + 1);
+    
+    // Create cache parameters
+    const cacheParams = {
+      category: selectedCategory,
+      priceMin: priceRange[0],
+      priceMax: priceRange[1],
+      search: searchQuery,
+      sort: sortBy
+    };
+    
+    // Check cache first (only use cache if not forcing refresh)
+    if (refetchCount > 1) {
+      const cachedProducts = queryCache.get('products', cacheParams);
+      if (cachedProducts) {
+        console.log('Using cached products data');
+        setProducts(cachedProducts);
+        setLoading(false);
+        return;
+      }
+    }
+    
     try {
+      console.log('Fetching products...');
+      
       let query = supabase
         .from('products')
         .select('*, categories(name)');
@@ -85,21 +176,71 @@ function ProductsContent() {
           query = query.order('created_at', { ascending: false });
       }
       
-      const { data, error } = await query;
+      console.log('Executing products query...');
       
-      if (error) throw error;
+      // Add improvements to the query
+      const { data, error } = await query
+        .withTimeout(45000) // 45 second timeout
+        .withRetry(4, 2000); // 4 retries with 2s delay
+      
+      if (error) {
+        // Full error logging
+        console.error('Products error details:', error);
+        
+        // Check for specific errors
+        if (error.code === '42P01') {
+          // Table doesn't exist error
+          console.error('Products table does not exist!');
+          throw new Error('Products table does not exist. Please run the database setup script.');
+        } else if (error.code === 'PGRST116') {
+          // Foreign key constraint error
+          throw new Error('Database relationship error. Category may not exist.');
+        } else if (error.message && error.message.includes('network')) {
+          throw new Error('Network error. Please check your internet connection.');
+        } else if (error.message && error.message.includes('timeout')) {
+          throw new Error('Request timed out. Supabase may be experiencing high latency or connection issues.');
+        } else {
+          throw error;
+        }
+      }
+      
+      console.log('Products data:', data ? `Found ${data.length} products` : 'No data returned');
+      
+      // Store in cache if we got data
+      if (data) {
+        queryCache.set('products', cacheParams, data);
+      }
+      
+      // Set products data
       setProducts(data || []);
     } catch (error) {
-      console.error('Error fetching products:', error);
-      toast.error('Failed to load products');
+      // Improved error handling
+      const errorMessage = error.message || 'Unknown error';
+      const errorCode = error.code || 'No error code';
+      console.error('Error fetching products details:', { message: errorMessage, code: errorCode });
+      
+      // Set appropriate error message based on the error
+      if (errorMessage.includes('timeout')) {
+        setError('Database connection is slow. This is common with Supabase free tier. Try refreshing or waiting a few minutes.');
+      } else if (errorMessage.includes('table does not exist')) {
+        setError('Products table does not exist. Please use the Setup Database button below.');
+      } else {
+        setError(`Failed to load products: ${errorMessage}`);
+      }
+      
+      toast.error('Database connection issue', {
+        duration: 5000,
+        id: 'db-error'
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCategory, priceRange, sortBy, searchQuery, lastFetchTime, refetchCount]);
 
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchProducts();
+    // Force immediate refetch and clear search cache
+    setLastFetchTime(0);
   };
 
   const clearFilters = () => {
@@ -107,17 +248,53 @@ function ProductsContent() {
     setPriceRange([0, 10000]);
     setSortBy('newest');
     setSearchQuery('');
+    // Force refresh when clearing filters
+    setLastFetchTime(0);
   };
 
   const toggleFilters = () => {
     setFilterOpen(!filterOpen);
   };
 
+  const handleRetry = () => {
+    // Clear cache and force refresh
+    queryCache.clear('products');
+    setLastFetchTime(0);
+  };
+  
+  const handleDatabaseSetup = async () => {
+    setLoading(true);
+    setError('Setting up database...');
+    
+    try {
+      // Initialize basic database structure
+      await initializeDatabase();
+      
+      // Setup products database with sample data
+      const success = await setupProductsDatabase();
+      
+      if (success) {
+        setError(null);
+        // Wait a moment for DB operations to complete
+        setTimeout(() => {
+          fetchProducts();
+        }, 1000);
+      } else {
+        setError('Failed to set up database. See console for details.');
+      }
+    } catch (err) {
+      console.error('Database setup error:', err);
+      setError('Database setup failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <MainLayout>
       <div className="bg-gray-50 min-h-screen py-8">
         <div className="container mx-auto px-4">
-          <h1 className="text-3xl font-bold text-gray-800 mb-6">All Products</h1>
+          <h1 className="text-3xl font-bold text-black mb-6">All Products</h1>
           
           {/* Search Bar */}
           <div className="bg-white rounded-lg shadow p-4 mb-6">
@@ -128,7 +305,7 @@ function ProductsContent() {
                 </div>
                 <input
                   type="text"
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 text-black"
                   placeholder="Search products..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -157,7 +334,7 @@ function ProductsContent() {
             <div className={`md:block ${filterOpen ? 'block' : 'hidden'} md:w-1/4`}>
               <div className="bg-white rounded-lg shadow p-4 sticky top-24">
                 <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-xl font-semibold">Filters</h2>
+                  <h2 className="text-xl font-semibold text-black">Filters</h2>
                   <button
                     onClick={clearFilters}
                     className="text-green-600 text-sm hover:text-green-700 flex items-center"
@@ -168,7 +345,7 @@ function ProductsContent() {
                 
                 {/* Categories Filter */}
                 <div className="mb-6">
-                  <h3 className="text-lg font-medium mb-2">Categories</h3>
+                  <h3 className="text-lg font-medium text-black mb-2">Categories</h3>
                   <div className="space-y-2">
                     <div className="flex items-center">
                       <input
@@ -179,7 +356,7 @@ function ProductsContent() {
                         onChange={() => setSelectedCategory('')}
                         className="h-4 w-4 border-gray-300 text-green-600 focus:ring-green-500"
                       />
-                      <label htmlFor="all-categories" className="ml-2 block text-sm text-gray-700">
+                      <label htmlFor="all-categories" className="ml-2 block text-sm text-black">
                         All Categories
                       </label>
                     </div>
@@ -196,7 +373,7 @@ function ProductsContent() {
                         />
                         <label
                           htmlFor={`category-${category.id}`}
-                          className="ml-2 block text-sm text-gray-700"
+                          className="ml-2 block text-sm text-black"
                         >
                           {category.name}
                         </label>
@@ -207,7 +384,7 @@ function ProductsContent() {
                 
                 {/* Price Range Filter */}
                 <div className="mb-6">
-                  <h3 className="text-lg font-medium mb-2">Price Range</h3>
+                  <h3 className="text-lg font-medium text-black mb-2">Price Range</h3>
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm text-gray-500">
                       <span>₹{priceRange[0]}</span>
@@ -227,7 +404,7 @@ function ProductsContent() {
                 
                 {/* Sort By */}
                 <div>
-                  <h3 className="text-lg font-medium mb-2">Sort By</h3>
+                  <h3 className="text-lg font-medium text-black mb-2">Sort By</h3>
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
@@ -254,6 +431,44 @@ function ProductsContent() {
                       <div className="h-8 bg-gray-200 rounded w-full mt-auto"></div>
                     </div>
                   ))}
+                </div>
+              ) : error ? (
+                <div className="text-center py-12 bg-white rounded-lg shadow p-6">
+                  <h3 className="text-xl font-semibold text-gray-700 mb-2">Error Loading Products</h3>
+                  <p className="text-gray-600 mb-4">{error}</p>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <button
+                      onClick={handleRetry}
+                      className="bg-green-600 text-white py-2 px-6 rounded-md hover:bg-green-700 flex items-center justify-center"
+                    >
+                      <FiRefreshCw className="mr-2" /> Retry
+                    </button>
+                    
+                    {error.includes('table does not exist') && (
+                      <button
+                        onClick={handleDatabaseSetup}
+                        className="bg-blue-600 text-white py-2 px-6 rounded-md hover:bg-blue-700 flex items-center justify-center"
+                        disabled={loading}
+                      >
+                        <FiDatabase className="mr-2" /> Setup Database
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Show SQL instructions if needed */}
+                  {error.includes('table does not exist') && (
+                    <div className="mt-6 text-left bg-gray-100 p-4 rounded-md">
+                      <h4 className="font-semibold mb-2">Manual Database Setup</h4>
+                      <p className="text-sm mb-2">If the automatic setup doesn't work, you can manually run the SQL commands:</p>
+                      <ol className="text-xs list-decimal pl-5 space-y-1">
+                        <li>Go to your Supabase project dashboard</li>
+                        <li>Open the SQL Editor</li>
+                        <li>Create a new query</li>
+                        <li>Copy and run the SQL functions from the <code className="bg-gray-200 px-1 rounded">sql-functions.md</code> file</li>
+                        <li>Refresh this page after setup</li>
+                      </ol>
+                    </div>
+                  )}
                 </div>
               ) : products.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -55,7 +55,87 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 ```
 
-## 2. Function to Create User Addresses Table If Not Exists
+## 2. Function to Create Products Table If Not Exists
+
+```sql
+CREATE OR REPLACE FUNCTION create_products_table_if_not_exists()
+RETURNS void AS $$
+BEGIN
+  -- Ensure uuid extension is available
+  CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+  -- Check if the table exists
+  IF NOT EXISTS (
+    SELECT FROM pg_tables 
+    WHERE schemaname = 'public' 
+    AND tablename = 'products'
+  ) THEN
+    -- Create the products table
+    CREATE TABLE public.products (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      name TEXT NOT NULL,
+      description TEXT,
+      price DECIMAL(10, 2) NOT NULL,
+      image_url TEXT,
+      stock INTEGER NOT NULL DEFAULT 0,
+      category_id UUID,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    -- Create categories table if it doesn't exist
+    IF NOT EXISTS (
+      SELECT FROM pg_tables 
+      WHERE schemaname = 'public' 
+      AND tablename = 'categories'
+    ) THEN
+      CREATE TABLE public.categories (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        name TEXT NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      -- Add some basic categories
+      INSERT INTO public.categories (name) VALUES 
+        ('Fruits'), 
+        ('Vegetables'), 
+        ('Dairy'), 
+        ('Bakery'), 
+        ('Beverages');
+    END IF;
+
+    -- Add foreign key once both tables exist
+    ALTER TABLE public.products 
+      ADD CONSTRAINT fk_category 
+      FOREIGN KEY (category_id) 
+      REFERENCES public.categories(id);
+
+    -- Enable Row Level Security
+    ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+
+    -- Create policies
+    CREATE POLICY "Everyone can view products" 
+      ON public.products FOR SELECT 
+      USING (true);
+      
+    CREATE POLICY "Everyone can view categories" 
+      ON public.categories FOR SELECT 
+      USING (true);
+
+    -- Create trigger for updated_at
+    CREATE TRIGGER set_products_updated_at
+      BEFORE UPDATE ON public.products
+      FOR EACH ROW
+      EXECUTE FUNCTION public.set_current_timestamp_updated_at();
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+## 3. Function to Create User Addresses Table If Not Exists
 
 ```sql
 CREATE OR REPLACE FUNCTION create_user_addresses_table_if_not_exists()
@@ -114,7 +194,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 ```
 
-## 3. Function for Setting Updated Timestamp
+## 4. Function for Setting Updated Timestamp
 
 This helper function is required for the triggers:
 
