@@ -12,6 +12,12 @@ import { initializeDatabase } from '../../utils/setup-db';
 import { setupProductsDatabase } from '../../utils/create-tables';
 import logger from '../../utils/logger';
 
+// Detect environment
+const isLocalhost = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' || 
+  window.location.hostname === '127.0.0.1'
+);
+
 // Connection diagnostic component
 function ConnectionDiagnostics({ isVisible }) {
   const [stats, setStats] = useState(null);
@@ -31,7 +37,10 @@ function ConnectionDiagnostics({ isVisible }) {
     <div className="mt-4 p-4 bg-gray-100 rounded-md text-sm">
       <div className="flex justify-between items-center">
         <h4 className="font-medium flex items-center">
-          <FiWifi className="mr-2" /> Connection Diagnostics
+          <FiWifi className="mr-2" /> Connection Diagnostics 
+          <span className="ml-2 text-xs px-2 py-0.5 rounded bg-gray-200">
+            {stats.environment}
+          </span>
         </h4>
         <button 
           onClick={() => setExpanded(!expanded)}
@@ -73,14 +82,19 @@ function ConnectionDiagnostics({ isVisible }) {
           )}
           
           <div className="mt-3 text-xs">
-            <p><strong>Note:</strong> Supabase free tier has limited connections and may experience timeouts during high load or after periods of inactivity.</p>
+            <p><strong>Note:</strong> {isLocalhost 
+              ? "Local development may experience different connection patterns than production."
+              : "Supabase free tier has limited connections and may experience timeouts during high load or after periods of inactivity."
+            }</p>
           </div>
         </div>
       ) : (
         <div className="mt-2 text-xs text-gray-700">
           {stats.recommendations.length > 0
             ? `${stats.recommendations[0]} ${stats.recommendations.length > 1 ? `(+${stats.recommendations.length - 1} more)` : ''}`
-            : 'No specific issues detected.'}
+            : isLocalhost 
+              ? 'Local connection appears stable.'
+              : 'No specific issues detected with production connection.'}
         </div>
       )}
     </div>
@@ -132,13 +146,16 @@ function ProductsContent() {
           return;
         }
         
+        // Use environment-appropriate timeout 
+        const timeoutMs = isLocalhost ? 15000 : 30000;
+        
         // Use optimized supabase client
         const { data, error } = await supabase
           .from('categories')
           .select('*')
           .order('name')
-          .withTimeout(30000) // 30 second timeout
-          .withRetry(3, 2000); // 3 retries with 2 second starting delay
+          .withTimeout(timeoutMs)
+          .withRetry(isLocalhost ? 2 : 3, 2000);
         
         if (error) {
           console.error('Categories error details:', error);
@@ -253,10 +270,14 @@ function ProductsContent() {
       
       console.log('Executing products query...');
       
+      // Use environment-appropriate settings
+      const timeoutMs = isLocalhost ? 20000 : 45000;
+      const retries = isLocalhost ? 3 : 4;
+      
       // Add improvements to the query
       const { data, error } = await query
-        .withTimeout(45000) // 45 second timeout
-        .withRetry(4, 2000); // 4 retries with 2s delay
+        .withTimeout(timeoutMs)
+        .withRetry(retries, 2000);
       
       if (error) {
         // Full error logging
@@ -528,6 +549,13 @@ function ProductsContent() {
                         <FiDatabase className="mr-2" /> Setup Database
                       </button>
                     )}
+                    
+                    <a
+                      href="/database-fix"
+                      className="bg-indigo-600 text-white py-2 px-6 rounded-md hover:bg-indigo-700 flex items-center justify-center"
+                    >
+                      <FiDatabase className="mr-2" /> Database Diagnostics
+                    </a>
                   </div>
                   
                   {/* Add connection diagnostics */}
@@ -536,15 +564,12 @@ function ProductsContent() {
                   {/* Show SQL instructions if needed */}
                   {error.includes('table does not exist') && (
                     <div className="mt-6 text-left bg-gray-100 p-4 rounded-md">
-                      <h4 className="font-semibold mb-2">Manual Database Setup</h4>
-                      <p className="text-sm mb-2">If the automatic setup doesn't work, you can manually run the SQL commands:</p>
-                      <ol className="text-xs list-decimal pl-5 space-y-1">
-                        <li>Go to your Supabase project dashboard</li>
-                        <li>Open the SQL Editor</li>
-                        <li>Create a new query</li>
-                        <li>Copy and run the SQL functions from the <code className="bg-gray-200 px-1 rounded">sql-functions.md</code> file</li>
-                        <li>Refresh this page after setup</li>
-                      </ol>
+                      <h4 className="font-semibold mb-2">Database Setup Required</h4>
+                      <p className="text-sm mb-2">
+                        You need to set up the database tables. Please visit the 
+                        <a href="/database-fix" className="text-blue-600 hover:text-blue-800 mx-1">Database Diagnostics</a>
+                        page for guided setup.
+                      </p>
                     </div>
                   )}
                 </div>

@@ -4,6 +4,20 @@
 
 import logger from './logger';
 
+// Detect environment for appropriate thresholds
+const isLocalhost = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' || 
+  window.location.hostname === '127.0.0.1'
+);
+
+// Configure thresholds based on environment
+const thresholds = {
+  slowQuery: isLocalhost ? 3000 : 5000,      // Slow query threshold
+  slowPing: isLocalhost ? 1000 : 2000,       // Slow ping threshold
+  highLatency: isLocalhost ? 500 : 1000,     // High latency threshold
+  pingInterval: isLocalhost ? 60000 : 30000  // Ping interval (1min local, 30s production)
+};
+
 class ConnectionMonitor {
   constructor() {
     this.queries = [];
@@ -11,6 +25,9 @@ class ConnectionMonitor {
     this.isInitialized = false;
     this.pingResults = [];
     this.maxPingResults = 20;
+    this.environment = isLocalhost ? 'localhost' : 'production';
+    
+    logger.logInfo(`Connection monitor initialized for ${this.environment}`, 'monitor');
   }
 
   /**
@@ -44,7 +61,8 @@ class ConnectionMonitor {
         message: error.message,
         code: error.code
       } : null,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      environment: this.environment
     };
     
     // Add to the beginning of the array
@@ -58,7 +76,7 @@ class ConnectionMonitor {
     // Log to console for debugging
     if (!success) {
       logger.logError(`Query failed: ${table}.${operation} (${duration}ms)`, error);
-    } else if (duration > 5000) {
+    } else if (duration > thresholds.slowQuery) {
       logger.logWarn(`Slow query: ${table}.${operation} (${duration}ms)`);
     }
     
@@ -69,13 +87,15 @@ class ConnectionMonitor {
    * Start periodic ping to check connection health
    */
   startPeriodicPing() {
-    // Run a ping every 30 seconds
+    // Run a ping at environment-specific interval
     this.pingInterval = setInterval(() => {
       this.pingSupabase();
-    }, 30000);
+    }, thresholds.pingInterval);
     
     // Run an immediate ping
     this.pingSupabase();
+    
+    logger.logDebug(`Started pinging every ${thresholds.pingInterval/1000}s`, 'monitor');
   }
   
   /**
@@ -91,7 +111,10 @@ class ConnectionMonitor {
       // Simple fetch to the supabase URL to check connectivity
       const response = await fetch('/api/ping-supabase', { 
         method: 'GET',
-        headers: { 'Cache-Control': 'no-cache' }
+        headers: { 
+          'Cache-Control': 'no-cache',
+          'X-Client-Env': this.environment
+        }
       });
       
       success = response.ok;
@@ -107,7 +130,8 @@ class ConnectionMonitor {
         timestamp: new Date().toISOString(),
         duration,
         success,
-        error
+        error,
+        environment: this.environment
       };
       
       this.pingResults.unshift(result);
@@ -119,7 +143,7 @@ class ConnectionMonitor {
       // Log issues
       if (!success) {
         logger.logWarn(`Supabase connection check failed: ${error?.message || 'Unknown error'}`);
-      } else if (duration > 2000) {
+      } else if (duration > thresholds.slowPing) {
         logger.logWarn(`Slow Supabase connection: ${duration}ms ping time`);
       }
     }
@@ -138,6 +162,7 @@ class ConnectionMonitor {
     return {
       queries: queryStats,
       connection: pingStats,
+      environment: this.environment,
       recommendations: this.generateRecommendations(queryStats, pingStats)
     };
   }
@@ -166,7 +191,7 @@ class ConnectionMonitor {
       maxDuration = Math.max(maxDuration, query.duration);
       
       if (query.success) successCount++;
-      if (query.duration > 3000) slowCount++;
+      if (query.duration > thresholds.slowQuery) slowCount++;
     });
     
     return {
@@ -221,8 +246,12 @@ class ConnectionMonitor {
       recommendations.push('Network connectivity issues detected. Check your internet connection.');
     }
     
-    if (pingStats.avgDuration > 1000) {
-      recommendations.push('High network latency detected. This can cause timeouts with Supabase.');
+    if (pingStats.avgDuration > thresholds.highLatency) {
+      if (isLocalhost) {
+        recommendations.push('High network latency detected even on localhost. Check if Supabase is under high load.');
+      } else {
+        recommendations.push('High network latency detected. This can cause timeouts with Supabase.');
+      }
     }
     
     // Query performance
@@ -235,7 +264,20 @@ class ConnectionMonitor {
     }
     
     if (queryStats.avgDuration > 2000) {
-      recommendations.push('Slow average query time. Consider implementing more aggressive caching.');
+      if (isLocalhost) {
+        recommendations.push('Slow average query time on localhost. Check for complex queries or Supabase load.');
+      } else {
+        recommendations.push('Slow average query time. Consider implementing more aggressive caching.');
+      }
+    }
+    
+    // Add environment-specific recommendations
+    if (isLocalhost && pingStats.avgDuration > 500) {
+      recommendations.push('Localhost connection is surprisingly slow. Check for other processes using resources.');
+    }
+    
+    if (!isLocalhost && pingStats.avgDuration > 2000) {
+      recommendations.push('Production connection is very slow. Free tier limitations or server load may be affecting performance.');
     }
     
     return recommendations;

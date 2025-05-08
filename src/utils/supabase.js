@@ -9,8 +9,9 @@ import connectionMonitor from './connection-monitor';
 // This is needed because sometimes Next.js doesn't properly load env variables in certain contexts
 const envConfig = require('../../env-config');
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || envConfig.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || envConfig.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Hard-code the credentials directly to ensure they're available
+const supabaseUrl = 'https://itetzcqolezorrcegtkf.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0ZXR6Y3FvbGV6b3JyY2VndGtmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1NDYwNjgsImV4cCI6MjA2MjEyMjA2OH0.f_RecDERFMBYzffSAzkx3vgENZuaRT5WiFXoL6Na-ss';
 
 // Detect environment
 const isLocalhost = typeof window !== 'undefined' && (
