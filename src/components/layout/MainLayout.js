@@ -2,15 +2,19 @@
 
 import Header from './Header';
 import Footer from './Footer';
-import AuthDebug from '../AuthDebug';
+import ErrorBoundary from '../ErrorBoundary';
+import AuthErrorBoundary from '../AuthErrorBoundary';
 
 export default function MainLayout({ children }) {
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header />
-      <main className="flex-grow">{children}</main>
-      <Footer />
-      <AuthDebug />
-    </div>
+    <ErrorBoundary>
+      <AuthErrorBoundary>
+        <div className="flex flex-col min-h-screen">
+          <Header />
+          <main className="flex-grow">{children}</main>
+          <Footer />
+        </div>
+      </AuthErrorBoundary>
+    </ErrorBoundary>
   );
 } 

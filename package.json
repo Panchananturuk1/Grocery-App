@@ -6,7 +6,6 @@
     "dev": "next dev",
     "build": "next build",
     "start": "node server.js",
-    "start:minimal": "node server-minimal.js",
     "lint": "next lint"
   },
   "dependencies": {

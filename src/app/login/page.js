@@ -1,159 +1,259 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import MainLayout from '../../components/layout/MainLayout';
-import { FiMail, FiLock, FiLoader, FiAlertCircle } from 'react-icons/fi';
-import toast from 'react-hot-toast';
+import { FiMail, FiLock, FiLoader, FiAlertCircle, FiEye, FiEyeOff, FiRefreshCw } from 'react-icons/fi';
+import toastManager from '../../utils/toast-manager';
 import supabase from '../../utils/supabase';
 import { useAuth } from '../../context/AuthContext'; 
+import ClientWrapper from '../../components/ClientWrapper';
 
-export default function Login() {
+// Check if we're running in a browser environment
+const isBrowser = typeof window !== 'undefined';
+
+// Define a component to show common database errors
+const DatabaseErrorMessage = ({ error }) => {
+  if (!error) return null;
+  
+  // Handle specific database errors
+  if (error.includes('Database connection error') || 
+      error.includes('timeout') || 
+      error.includes('network') || 
+      error.includes('Connection')) {
+    return (
+      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative mb-4">
+        <strong className="font-bold">Database connection error!</strong>
+        <p className="text-sm">
+          We're having trouble connecting to our database. This could be due to:
+        </p>
+        <ul className="list-disc list-inside text-sm mt-2">
+          <li>Temporary server issues</li>
+          <li>Network connectivity problems</li>
+          <li>Supabase maintenance</li>
+        </ul>
+        <p className="text-sm mt-2">
+          Please try again in a few minutes.
+        </p>
+      </div>
+    );
+  }
+  
+  // Default error message
+  return (
+    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative mb-4">
+      <p>{error}</p>
+    </div>
+  );
+};
+
+function LoginContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [formErrors, setFormErrors] = useState({
-    email: '',
-    password: ''
-  });
+  const [loginError, setLoginError] = useState(null);
+  const [redirecting, setRedirecting] = useState(false);
   const router = useRouter();
-  const { user } = useAuth();
+  const { isAuthenticated, user, signIn } = useAuth();
+  const loginAttemptRef = useRef(0);
+  const loginTimeoutRef = useRef(null);
   
-  // Check if user is already logged in
+  // Clear any lingering timeouts when component unmounts
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        // Check if user is already authenticated via context
-        if (user) {
-          console.log('Login page: User already logged in, redirecting to home');
-          router.push('/');
-          return;
-        }
-        
-        // Double-check with Supabase directly
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          console.log('Login page: Session found, redirecting to home');
-          router.push('/');
-        }
-      } catch (err) {
-        console.error('Login page auth check error:', err);
+    return () => {
+      if (loginTimeoutRef.current) {
+        clearTimeout(loginTimeoutRef.current);
       }
     };
-    
-    checkAuth();
-  }, [user, router]);
+  }, []);
 
-  // Clear field-specific error when user types
+  // Check if user is already logged in - both on mount and when auth state changes
   useEffect(() => {
-    if (email && formErrors.email) {
-      setFormErrors(prev => ({ ...prev, email: '' }));
-    }
-  }, [email]);
+    const checkAndRedirect = async () => {
+      console.log("Checking auth status for redirect");
+      
+      // First check auth context
+      if (isAuthenticated && user) {
+        console.log("Already authenticated via context, redirecting");
+        setRedirecting(true);
+        if (isBrowser) {
+          window.location.href = '/';
+        }
+        return;
+      }
 
-  useEffect(() => {
-    if (password && formErrors.password) {
-      setFormErrors(prev => ({ ...prev, password: '' }));
-    }
-  }, [password]);
+      // As a fallback, check directly with Supabase
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          console.log("Session found via direct check, redirecting");
+          setRedirecting(true);
+          if (isBrowser) {
+            window.location.href = '/';
+          }
+          return;
+        }
+      } catch (err) {
+        console.error("Error checking session:", err);
+      }
+    };
 
-  const validateForm = () => {
-    let isValid = true;
-    const errors = { email: '', password: '' };
+    checkAndRedirect();
+  }, [isAuthenticated, user]);
 
-    // Email validation
-    if (!email) {
-      errors.email = 'Email is required';
-      isValid = false;
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
-      errors.email = 'Please enter a valid email address';
-      isValid = false;
-    }
-
-    // Password validation
-    if (!password) {
-      errors.password = 'Password is required';
-      isValid = false;
-    }
-
-    setFormErrors(errors);
-    return isValid;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoginError('');
+  const handleDirectLogin = async (e) => {
+    if (e) e.preventDefault();
     
-    if (!validateForm()) {
+    if (loading) return;
+    
+    if (!email || !password) {
+      setLoginError('Please enter both email and password');
       return;
     }
+
+    // Increment login attempt counter
+    loginAttemptRef.current += 1;
+    const currentAttempt = loginAttemptRef.current;
     
     setLoading(true);
+    setLoginError(null);
+    
+    // Set a hard timeout to prevent infinite loading
+    if (loginTimeoutRef.current) {
+      clearTimeout(loginTimeoutRef.current);
+    }
+    
+    loginTimeoutRef.current = setTimeout(() => {
+      // Only update state if this is still the current login attempt
+      if (currentAttempt === loginAttemptRef.current) {
+        setLoading(false);
+        setLoginError('Login request timed out. Network may be slow or server unavailable.');
+      }
+    }, 15000); // Increased timeout to 15 seconds for slower networks
 
     try {
-      console.log('Attempting login with email:', email);
-      // Login directly with Supabase
+      // First clear any existing auth data to prevent conflicts
+      if (isBrowser) {
+        try {
+          localStorage.removeItem('sb:session');
+          sessionStorage.removeItem('sb:session');
+          // Clear any other potential auth-related storage
+          Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('sb-') || key.includes('supabase')) {
+              localStorage.removeItem(key);
+            }
+          });
+          Object.keys(sessionStorage).forEach(key => {
+            if (key.startsWith('sb-') || key.includes('supabase')) {
+              sessionStorage.removeItem(key);
+            }
+          });
+        } catch (e) {
+          console.warn('Error clearing storage:', e);
+        }
+      }
+
+      // Use supabase directly instead of context for more direct control
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: email.trim(),
+        password
       });
-      
+
+      // Clear the timeout since we got a response
+      if (loginTimeoutRef.current) {
+        clearTimeout(loginTimeoutRef.current);
+        loginTimeoutRef.current = null;
+      }
+
+      // Only update state if this is still the current login attempt
+      if (currentAttempt !== loginAttemptRef.current) return;
+
       if (error) {
-        let errorMessage = 'Login failed. Please try again.';
+        console.error('Login error:', error);
+        setLoading(false);
         
-        // Provide more specific error messages based on the error
         if (error.message.includes('Invalid login credentials')) {
-          errorMessage = 'Invalid email or password. Please try again.';
-        } else if (error.message.includes('Email not confirmed')) {
-          errorMessage = 'Please verify your email before logging in. Check your inbox for a confirmation link.';
-        } else if (error.message.toLowerCase().includes('network')) {
-          errorMessage = 'Network error. Please check your internet connection and try again.';
+          setLoginError('Invalid email or password. Please try again.');
+        } else {
+          setLoginError(error.message || 'An error occurred during login');
+        }
+        return;
+      }
+      
+      if (data && data.user) {
+        // Import and initialize database for this user
+        try {
+          const { initializeDatabase } = await import('../../utils/setup-db');
+          await initializeDatabase();
+        } catch (dbError) {
+          console.error('Error initializing database:', dbError);
+          // Continue anyway - non-fatal error
         }
         
-        setLoginError(errorMessage);
-        toast.error(errorMessage);
-        console.error('Login error:', error);
-      } else {
-        console.log('Login successful, user:', data?.user?.email);
-        toast.success('Logged in successfully');
+        console.log("Login successful, redirecting...");
+        toastManager.success('Login successful!');
         
-        // Force a small delay to allow auth state to propagate
-        setTimeout(() => {
-          router.push('/');
-        }, 500);
+        // Set redirecting state to show loading screen
+        setRedirecting(true);
+        
+        // Set a guaranteed hard redirect after a short delay
+        // This ensures we redirect even if context updates are slow
+        if (isBrowser) {
+          setTimeout(() => {
+            console.log("Forcing navigation to home page");
+            window.location.href = '/';
+          }, 1000);
+        }
+      } else {
+        setLoading(false);
+        setLoginError('Login succeeded but user data is missing. Please try again.');
       }
-    } catch (err) {
-      const errorMsg = err.message || 'Login failed. Please try again.';
-      setLoginError(errorMsg);
-      toast.error(errorMsg);
-      console.error('Login exception:', err);
-    } finally {
+    } catch (error) {
+      // Clear the timeout since we got a response (error)
+      if (loginTimeoutRef.current) {
+        clearTimeout(loginTimeoutRef.current);
+        loginTimeoutRef.current = null;
+      }
+      
+      // Only update state if this is still the current login attempt
+      if (currentAttempt !== loginAttemptRef.current) return;
+      
+      console.error('Login exception:', error);
       setLoading(false);
+      setLoginError('An unexpected error occurred. Please try again later.');
     }
   };
+
+  // If we're redirecting, show a loading screen instead of the login form
+  if (redirecting) {
+    return (
+      <MainLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <FiLoader className="animate-spin h-12 w-12 text-green-600 mx-auto mb-4" />
+            <p className="text-lg text-gray-700">Logging you in...</p>
+            <p className="text-sm text-gray-500 mt-2">You will be redirected shortly</p>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
-      <div className="bg-gray-50 min-h-screen py-12">
-        <div className="container mx-auto px-4">
-          <div className="max-w-md mx-auto bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="bg-green-600 text-white py-4 px-6">
-              <h2 className="text-2xl font-bold">Login to Your Account</h2>
-              <p className="text-green-100">Welcome back to OrderKaro!</p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="py-6 px-8">
-              {loginError && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded flex items-start">
-                  <FiAlertCircle className="mr-2 mt-0.5 flex-shrink-0" />
-                  <span>{loginError}</span>
-                </div>
-              )}
+      <div className="container mx-auto px-4 py-12">
+        <div className="max-w-md mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="bg-green-600 py-6 px-8">
+            <h2 className="text-2xl font-bold text-white">Login to OrderKaro</h2>
+          </div>
+          <div className="p-8">
+            {loginError && <DatabaseErrorMessage error={loginError} />}
             
+            <form onSubmit={handleDirectLogin}>
               <div className="mb-6">
-                <label htmlFor="email" className="block text-gray-700 text-sm font-medium mb-2">
+                <label className="block text-gray-700 text-sm font-medium mb-2" htmlFor="email">
                   Email Address
                 </label>
                 <div className="relative">
@@ -163,24 +263,18 @@ export default function Login() {
                   <input
                     id="email"
                     type="email"
-                    className={`w-full pl-10 pr-3 py-2 border ${
-                      formErrors.email ? 'border-red-500' : 'border-gray-300'
-                    } rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 bg-white text-gray-900`}
+                    className="pl-10 w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    required
+                    disabled={loading}
                   />
                 </div>
-                {formErrors.email && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <FiAlertCircle className="mr-1" size={14} />
-                    {formErrors.email}
-                  </p>
-                )}
               </div>
-
+              
               <div className="mb-6">
-                <label htmlFor="password" className="block text-gray-700 text-sm font-medium mb-2">
+                <label className="block text-gray-700 text-sm font-medium mb-2" htmlFor="password">
                   Password
                 </label>
                 <div className="relative">
@@ -189,42 +283,67 @@ export default function Login() {
                   </div>
                   <input
                     id="password"
-                    type="password"
-                    className={`w-full pl-10 pr-3 py-2 border ${
-                      formErrors.password ? 'border-red-500' : 'border-gray-300'
-                    } rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 bg-white text-gray-900`}
-                    placeholder="********"
+                    type={showPassword ? "text" : "password"}
+                    className="pl-10 w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    required
+                    disabled={loading}
                   />
+                  <div 
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <FiEyeOff className="text-gray-400 hover:text-gray-600" />
+                    ) : (
+                      <FiEye className="text-gray-400 hover:text-gray-600" />
+                    )}
+                  </div>
                 </div>
-                {formErrors.password && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <FiAlertCircle className="mr-1" size={14} />
-                    {formErrors.password}
-                  </p>
-                )}
               </div>
-
-              <button
-                type="submit"
-                className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 flex items-center justify-center"
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <FiLoader className="animate-spin mr-2" /> Logging in...
-                  </>
-                ) : (
-                  'Login'
-                )}
-              </button>
-
-              <div className="mt-6 text-center">
+              
+              <div className="mb-6">
+                <button
+                  type="submit"
+                  className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 flex items-center justify-center"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <FiLoader className="animate-spin mr-2" />
+                      Logging in...
+                    </>
+                  ) : (
+                    "Login"
+                  )}
+                </button>
+              </div>
+              
+              {loginError && loginError.includes('timeout') && (
+                <div className="mb-4 text-center">
+                  <button
+                    type="button"
+                    onClick={() => isBrowser && window.location.reload()}
+                    className="text-green-600 underline inline-flex items-center"
+                  >
+                    <FiRefreshCw className="mr-1" /> Reload page and try again
+                  </button>
+                </div>
+              )}
+              
+              <div className="flex justify-between items-center mb-4">
+                <Link href="/forgot-password" className="text-sm text-green-600 hover:underline">
+                  Forgot your password?
+                </Link>
+              </div>
+              
+              <div className="text-center">
                 <p className="text-sm text-gray-600">
-                  Don&apos;t have an account?{' '}
-                  <Link href="/register" className="text-green-600 hover:text-green-500">
-                    Register here
+                  Don't have an account?{" "}
+                  <Link href="/register" className="text-green-600 hover:underline">
+                    Register
                   </Link>
                 </p>
               </div>
@@ -233,5 +352,13 @@ export default function Login() {
         </div>
       </div>
     </MainLayout>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <ClientWrapper waitForAuth={false}>
+      <LoginContent />
+    </ClientWrapper>
   );
 } 
