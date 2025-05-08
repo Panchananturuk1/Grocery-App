@@ -6,11 +6,86 @@ import MainLayout from '../../components/layout/MainLayout';
 import ProductCard from '../../components/products/ProductCard';
 import supabase from '../../utils/supabase';
 import queryCache from '../../utils/cache-util';
-import { FiSearch, FiFilter, FiX, FiRefreshCw, FiDatabase } from 'react-icons/fi';
+import { FiSearch, FiFilter, FiX, FiRefreshCw, FiDatabase, FiInfo, FiWifi } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import { initializeDatabase } from '../../utils/setup-db';
 import { setupProductsDatabase } from '../../utils/create-tables';
 import logger from '../../utils/logger';
+
+// Connection diagnostic component
+function ConnectionDiagnostics({ isVisible }) {
+  const [stats, setStats] = useState(null);
+  const [expanded, setExpanded] = useState(false);
+  
+  useEffect(() => {
+    if (isVisible) {
+      // Get connection stats
+      const connectionStats = supabase.getConnectionStats();
+      setStats(connectionStats);
+    }
+  }, [isVisible]);
+  
+  if (!isVisible || !stats) return null;
+  
+  return (
+    <div className="mt-4 p-4 bg-gray-100 rounded-md text-sm">
+      <div className="flex justify-between items-center">
+        <h4 className="font-medium flex items-center">
+          <FiWifi className="mr-2" /> Connection Diagnostics
+        </h4>
+        <button 
+          onClick={() => setExpanded(!expanded)}
+          className="text-blue-600 text-xs"
+        >
+          {expanded ? 'Hide Details' : 'Show Details'}
+        </button>
+      </div>
+      
+      {expanded ? (
+        <div className="mt-3">
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="bg-white p-2 rounded shadow-sm">
+              <p className="text-xs font-medium">Query Performance</p>
+              <ul className="text-xs mt-1">
+                <li>Success Rate: {stats.queries.successRate}%</li>
+                <li>Avg. Duration: {stats.queries.avgDuration}ms</li>
+                <li>Slow Queries: {stats.queries.slowQueries}</li>
+              </ul>
+            </div>
+            <div className="bg-white p-2 rounded shadow-sm">
+              <p className="text-xs font-medium">Connection Health</p>
+              <ul className="text-xs mt-1">
+                <li>Success Rate: {stats.connection.successRate}%</li>
+                <li>Avg. Ping: {stats.connection.avgDuration}ms</li>
+              </ul>
+            </div>
+          </div>
+          
+          {stats.recommendations.length > 0 && (
+            <div className="mt-2">
+              <p className="text-xs font-medium">Recommendations:</p>
+              <ul className="text-xs mt-1 list-disc pl-4 space-y-1">
+                {stats.recommendations.map((rec, i) => (
+                  <li key={i}>{rec}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          <div className="mt-3 text-xs">
+            <p><strong>Note:</strong> Supabase free tier has limited connections and may experience timeouts during high load or after periods of inactivity.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-2 text-xs text-gray-700">
+          {stats.recommendations.length > 0
+            ? `${stats.recommendations[0]} ${stats.recommendations.length > 1 ? `(+${stats.recommendations.length - 1} more)` : ''}`
+            : 'No specific issues detected.'}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ProductsContent() {
   const searchParams = useSearchParams();
@@ -454,6 +529,9 @@ function ProductsContent() {
                       </button>
                     )}
                   </div>
+                  
+                  {/* Add connection diagnostics */}
+                  {error.includes('connection is slow') && <ConnectionDiagnostics isVisible={true} />}
                   
                   {/* Show SQL instructions if needed */}
                   {error.includes('table does not exist') && (

@@ -2,6 +2,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import logger from './logger';
+import connectionMonitor from './connection-monitor';
 // const DB_CONFIG = require('../config/supabase-config');
 
 // Get Supabase credentials from environment variables or fallback to hard-coded values
@@ -10,6 +11,23 @@ const envConfig = require('../../env-config');
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || envConfig.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || envConfig.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+// Detect environment
+const isLocalhost = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' || 
+  window.location.hostname === '127.0.0.1'
+);
+
+// Configure timeouts based on environment
+const timeoutConfig = {
+  fetch: isLocalhost ? 30000 : 60000, // 30s local, 60s deployed
+  query: isLocalhost ? 25000 : 45000, // 25s local, 45s deployed
+  maxRetries: isLocalhost ? 3 : 5     // Fewer retries locally
+};
+
+// Log environment detection
+logger.logInfo(`Environment detected: ${isLocalhost ? 'localhost' : 'production'}`, 'supabase');
+logger.logInfo(`Timeout config: ${JSON.stringify(timeoutConfig)}`, 'supabase');
 
 // Create a memory storage fallback for server-side rendering
 class MemoryStorage {
@@ -58,26 +76,42 @@ logger.logInfo('Supabase configuration:', 'supabase', {
   environment: isBrowser ? 'browser' : 'server'
 });
 
-// Create a custom fetch with timeout
+// Create a custom fetch with timeout and monitoring
 const fetchWithTimeout = (url, options = {}) => {
   const controller = new AbortController();
-  const { timeout = 60000 } = options; // Increased to 60 seconds timeout
+  const { timeout = timeoutConfig.fetch } = options; // Use environment-specific timeout
   
   const timeoutId = setTimeout(() => {
     controller.abort();
   }, timeout);
   
+  // Add monitoring headers
+  const headers = {
+    ...options.headers,
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+    'X-Client-Timestamp': Date.now().toString(),
+    'X-Client-Env': isLocalhost ? 'localhost' : 'production'
+  };
+  
+  const startTime = Date.now();
+  
   return fetch(url, {
     ...options,
     signal: controller.signal,
-    // Add cache control to help with performance
-    headers: {
-      ...options.headers,
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache',
-    }
+    headers
   }).finally(() => {
     clearTimeout(timeoutId);
+    
+    // Log the request duration if it's a Supabase request
+    if (url.includes(supabaseUrl)) {
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      
+      if (duration > 5000) {
+        logger.logWarn(`Slow Supabase request: ${duration}ms`);
+      }
+    }
   });
 };
 
@@ -131,23 +165,37 @@ try {
       const builder = originalSelect(...args);
       
       // Add a retry method to the builder
-      builder.withRetry = function(retries = 5, delay = 1000) {
+      builder.withRetry = function(retries = timeoutConfig.maxRetries, delay = 1000) {
         const originalThen = this.then.bind(this);
         
         this.then = async function(onFulfilled, onRejected) {
           let lastError;
           let attempts = 0;
           
+          const startTime = Date.now();
+          let endTime;
+          let success = false;
+          
           while (attempts < retries) {
             try {
               logger.logDebug(`Attempt ${attempts + 1}/${retries} for ${table} query`, 'supabase');
               const result = await originalThen(onFulfilled, onRejected);
+              
+              endTime = Date.now();
+              success = true;
+              
+              // Log successful query
+              connectionMonitor.logQuery(table, 'select', startTime, endTime, true);
+              
               return result;
             } catch (error) {
               lastError = error;
               attempts++;
               
               logger.logWarn(`Query attempt ${attempts} failed for ${table}:`, error.message);
+              
+              // Log failed query attempt
+              connectionMonitor.logQuery(table, 'select', startTime, Date.now(), false, error);
               
               if (attempts >= retries) break;
               
@@ -166,7 +214,7 @@ try {
       };
       
       // Add withTimeout to allow custom timeouts per query
-      builder.withTimeout = function(timeoutMs = 45000) {
+      builder.withTimeout = function(timeoutMs = timeoutConfig.query) {
         const originalThen = this.then.bind(this);
         
         this.then = function(onFulfilled, onRejected) {
@@ -239,5 +287,10 @@ try {
     rpc: (func) => ({ error: new Error(`Supabase client initialization failed when calling function ${func}`) })
   };
 }
+
+// Add helper methods to the client
+supabase.getConnectionStats = () => {
+  return connectionMonitor.getStats();
+};
 
 export default supabase; 
